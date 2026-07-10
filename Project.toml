@@ -1,0 +1,4 @@
+name = "StochasticProcesses"
+uuid = "6452f8e8-b9fd-45b3-b85f-9c8f21420a11"
+authors = ["var-pi <stefanehin4@gmail.com>"]
+version = "0.1.0"
