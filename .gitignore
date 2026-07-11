@@ -5,3 +5,17 @@
 .DS_Store
 # Manifest.toml is intentionally committed (reproducibility) — do NOT ignore it.
 # experiments/**/figures/ are committed artifacts — do NOT ignore them.
+
+# LaTeX build artifacts (compiled .pdf and source .tex are tracked)
+*.aux
+*.log
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.bbl
+*.blg
+*.nav
+*.snm
+*.vrb

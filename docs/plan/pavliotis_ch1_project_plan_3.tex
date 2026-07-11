@@ -602,7 +602,7 @@ assemble_mean(gp::GaussianProcess, t_grid::AbstractVector) =
  (the Unit-0 headline check)."
 function empirical_cov(paths::AbstractMatrix)
     _, N = size(paths)
-    N > 1 || throw(ArgumentError("empirical_cov needs N ≥ 2 paths (got N=$N); the (N-1) " *
+    N > 1 || throw(ArgumentError("empirical_cov needs N >= 2 paths (got N=$N); the (N-1) " *
                                  "denominator is undefined for a single path."))
     mu = sum(paths, dims = 2) ./ N
     Xc = paths .- mu
