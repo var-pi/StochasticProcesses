@@ -1,5 +1,5 @@
 module StochasticProcesses
 
-greet() = print("Hello World!")
+# Submodules are added one per phase (Kernels, GaussianProcesses, Sampling).
 
-end # module StochasticProcesses
+end # module
