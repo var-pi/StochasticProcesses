@@ -25,12 +25,14 @@ end
 assemble_mean(gp::GaussianProcess, t_grid::AbstractVector) =
     [gp.meanfn(t) for t in t_grid]
 
-"Empirical covariance across sample paths. `paths` is n_grid x N (one path
- per COLUMN -- a transpose silently estimates the wrong matrix). The
+"Empirical covariance across sample paths. `paths` is n_grid x N with N >= 2
+ (one path per COLUMN -- a transpose silently estimates the wrong matrix). The
  Frobenius error vs. assemble_cov decays at the Monte Carlo rate N^{-1/2}
  (the Unit-0 headline check)."
 function empirical_cov(paths::AbstractMatrix)
-    n, N = size(paths)
+    _, N = size(paths)
+    N > 1 || throw(ArgumentError("empirical_cov needs N ≥ 2 paths (got N=$N); the (N-1) " *
+                                 "denominator is undefined for a single path."))
     mu = sum(paths, dims = 2) ./ N
     Xc = paths .- mu
     return (Xc * Xc') ./ (N - 1)

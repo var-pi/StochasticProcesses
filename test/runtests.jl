@@ -42,6 +42,8 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs
         # Hand-computed target (NOT a re-run of the function's own formula): row means
         # are 2 and 5, so both centred rows are [-1 0 1]; (Xc*Xc')/(N-1) = [2 2; 2 2]/2.
         @test C ≈ [1.0 1.0; 1.0 1.0]
+        # The (N-1) denominator is undefined for a single path: guard, don't return NaN.
+        @test_throws ArgumentError empirical_cov(zeros(3, 1))
 
         # --- assemble_cov honours its Symmetric *type* contract (issymmetric alone
         # can't see a dropped wrapper: BM Σ is exactly symmetric as a plain Matrix too).
