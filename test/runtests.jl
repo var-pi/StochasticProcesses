@@ -1,4 +1,4 @@
-using Test, StochasticProcesses, LinearAlgebra
+using Test, StochasticProcesses, LinearAlgebra, StableRNGs
 
 @testset "StochasticProcesses" begin
     @testset "package loads" begin
@@ -44,5 +44,24 @@ using Test, StochasticProcesses, LinearAlgebra
         # Non-zero mean AND the keyword constructor are exercised (not only the zero default).
         gpm = GaussianProcess(brownian_motion_kernel; meanfn = t -> 2.0 + t)
         @test assemble_mean(gpm, [0.0, 0.5, 1.0]) == [2.0, 2.5, 3.0]
+    end
+
+    @testset "sample_cholesky: jitter control + reproducibility" begin
+        # BM Σ on a grid through t=0 has an all-zero first row (R(0,s)=0) → exactly
+        # singular: cholesky throws at jitter = 0, and the nugget restores it.
+        t_grid = range(0, 1; length = 64)
+        gp = GaussianProcess(brownian_motion_kernel)
+        Sigma = assemble_cov(gp, t_grid)
+
+        @test_throws PosDefException sample_cholesky(Sigma, StableRNG(1); jitter = 0.0)
+
+        # The nugget restores positive-definiteness → a full-length draw.
+        x = sample_cholesky(Sigma, StableRNG(1); jitter = 1e-10)
+        @test length(x) == length(t_grid)
+        @test all(isfinite, x)
+
+        # Reproducibility: same seed → identical draw; different seed → different.
+        @test sample_cholesky(Sigma, StableRNG(42)) == sample_cholesky(Sigma, StableRNG(42))
+        @test sample_cholesky(Sigma, StableRNG(42)) != sample_cholesky(Sigma, StableRNG(43))
     end
 end

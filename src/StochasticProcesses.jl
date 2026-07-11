@@ -10,4 +10,8 @@ include("gaussianprocess.jl")
 using .GaussianProcesses
 export GaussianProcess, assemble_cov, assemble_mean, empirical_cov
 
+include("sampling.jl")
+using .Sampling
+export sample_cholesky
+
 end # module
