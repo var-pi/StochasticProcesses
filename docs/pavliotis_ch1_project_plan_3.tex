@@ -209,7 +209,7 @@ Each unit below adds five implementation-oriented fields to the narrative ones: 
 \item[Check] Empirical covariance of $N$ paths against the analytic $R$, measured in Frobenius norm as a function of $N$.
 \item[Analytic target] $\|\widehat\Sigma_N - \Sigma\|_F \propto N^{-1/2}$, where $\Sigma_{ij}=R(t_i,t_j)$; the intercept is irrelevant, the exponent is the object.
 \item[Pass/fail] Fit $\log\|\widehat\Sigma_N-\Sigma\|_F$ against $\log N$ over $N\in[10^2,10^4]$; gate $|\widehat{\text{slope}}+\tfrac12| < 2.5\,\mathrm{SE}(\widehat{\text{slope}})$ (stochastic-slope gate).
-\item[Negative control] Set $\texttt{jitter}=0$ and factor a fine-grid exponential-kernel $\Sigma$: \texttt{cholesky} throws \texttt{PosDefException} because $\Sigma$ is numerically indefinite. The throw disappears once $\varepsilon\gtrsim10^{-10}$ --- so the nugget is shown to be load-bearing, not cosmetic.
+\item[Negative control] Set $\texttt{jitter}=0$ and factor the \emph{same} Brownian-motion $\Sigma$ used in the main check: its $t=0$ row is identically zero ($R(0,s)=0$), so $\Sigma$ is exactly singular and \texttt{cholesky} throws \texttt{PosDefException}. The throw disappears once $\varepsilon\gtrsim10^{-10}$ --- so the nugget is shown to be load-bearing for the very $\Sigma$ used above, not for a separate pathological matrix. (Reusing the main-check $\Sigma$ is the more honest control: the exponential kernel is well-conditioned at ordinary grid resolutions --- $\operatorname{cond}\approx6\times10^4$ at 200 points --- and would \emph{not} throw at $\texttt{jitter}=0$.)
 \item[Artifact] Sample paths; \emph{error-vs-$N$ log--log plot} with the fitted $-\tfrac12$ slope annotated against the reference line --- the collapse of the fit onto slope $-\tfrac12$ is the feature that demonstrates success.
 \item[README] Concept: a Gaussian process is fixed by mean and covariance, and sampling is applying a square root of $\Sigma$. Why this check: the empirical covariance must converge to the analytic $R$ at the Monte-Carlo rate, and the \emph{slope} certifies both the sampler and the estimator at once. What it proves: the atomic draw underlying every later unit is correct.
 \item[Missteps] (i) \emph{Jitter too small} $\Rightarrow$ indefinite throw; \emph{too large} $\Rightarrow$ biased covariance. Guard: report $\varepsilon$ and confirm $\|\widehat\Sigma_N-\Sigma\|$ is not floored by $\varepsilon$. (ii) \emph{Path-matrix orientation:} \texttt{empirical\_cov} expects paths as columns ($n_{\text{grid}}\times N$); a transpose silently estimates the wrong matrix. Guard: assert \texttt{size(paths,1)==length(t\_grid)}. (iii) \emph{Global RNG:} use \texttt{StableRNG}, not \texttt{randn()} on the default stream.
@@ -622,7 +622,9 @@ export sample_cholesky, sample_kl, sample_random_fourier,
 
 "Route 1 (general): (jittered) Cholesky factorization of the covariance matrix.
  Sigma = L * L', X = L * z, z ~ N(0, I). The nugget eps*I restores
- numerical positive-definiteness for smooth, rapidly-decaying kernels."
+ positive-definiteness when the assembled Sigma is singular or numerically
+ indefinite (e.g. a grid through t=0 where R(0,s)=0, or near-duplicate grid
+ points)."
 function sample_cholesky(Sigma::AbstractMatrix, rng; jitter=1e-10)
     n = size(Sigma, 1)
     L = cholesky(Symmetric(Sigma) + jitter * I(n)).L
