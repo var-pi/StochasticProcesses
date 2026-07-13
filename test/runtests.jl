@@ -1,4 +1,4 @@
-using Test, StochasticProcesses, LinearAlgebra, StableRNGs
+using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
 
 @testset "StochasticProcesses" begin
     @testset "package loads" begin
@@ -104,11 +104,82 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs
         @test length(x) == 20 && all(isfinite, x)
     end
 
+    @testset "Spectral (Bochner): normalization + Lorentzian + round-trip" begin
+        # Deterministic throughout: r is a fixed sampled covariance sequence, no RNG.
+        D = 1.0; alpha = 1.0; dt = 0.05; n = 400          # n*dt = 20 ≈ 20/alpha: well-resolved
+        r = [exponential_kernel(0.0, k * dt; D = D, alpha = alpha) for k in 0:n-1]  # R(0)=D/alpha=1
+        omega, Shat = bochner_forward(r, dt)
+
+        # (1) NORMALIZATION GATE (~3% check, NOT 1e-10): int Shat dOmega -> R(0). This carries
+        #     truncation (r cut at n*dt), trapezoid, and dropped-Nyquist error, so it lands near
+        #     0.9749*R0 (pinned by dry-run), not machine zero -- deterministic but not exact.
+        R0 = D / alpha
+        @test isapprox(spectral_variance(omega, Shat), R0; rtol = 3e-2)
+
+        # (2) DROPPED-1/2pi NEGATIVE CONTROL (the 2pi lesson, as a passing test):
+        #     without the 1/2pi the integral lands on 2*pi*R(0), NOT R(0).
+        @test isapprox(spectral_variance(omega, 2pi .* Shat), 2pi * R0; rtol = 3e-2)
+        @test !isapprox(spectral_variance(omega, 2pi .* Shat), R0; rtol = 0.2)   # provably NOT 1
+
+        # (3) LORENTZIAN SHAPE MATCH at a few interior omega within the resolved band.
+        #     CONVENTION (F1): Shat is ONE-SIDED (interior bins folded/doubled), so at interior
+        #     omega it approximates the ONE-SIDED density 2*S(omega) -- compare to 2*S_analytic,
+        #     NOT S_analytic (comparing to the two-sided density is a clean factor-of-2 bug).
+        #     Realized error is <=0.11% (pinned by dry-run); rtol=1e-2 leaves headroom without
+        #     being a vacuous 50x-loose placeholder.
+        S_analytic(w) = D / (pi * (w^2 + alpha^2))            # TWO-SIDED density
+        for w0 in (0.5, 1.0, 2.0)
+            i = argmin(abs.(omega .- w0))
+            @test isapprox(Shat[i], 2 * S_analytic(omega[i]); rtol = 1e-2)
+        end
+
+        # (3b) ONE-SIDED <-> TWO-SIDED CONTRACT (F4 -- the test whose absence let the shape-gate
+        #      convention bug through; it locks the relationship the shape gate in (3) depends on).
+        o1, S1 = bochner_forward(r, dt; onesided = true)
+        o2, S2 = bochner_forward(r, dt; onesided = false)
+        keep = o2 .>= 0
+        @test o1 == o2[keep]                                  # same omega>=0 grid
+        @test isapprox(S1[1], S2[keep][1]; atol = 1e-12)      # DC bin NOT doubled
+        @test isapprox(S1[2:end], 2 .* S2[keep][2:end]; rtol = 1e-12)   # interior bins doubled
+        #      both conventions integrate to R(0): one-sided over omega>=0 == two-sided over R.
+        @test isapprox(spectral_variance(o1, S1), R0; rtol = 3e-2)
+        @test isapprox(spectral_variance(o2, S2), R0; rtol = 3e-2)
+
+        # (4) ROUND-TRIP: bochner_inverse inverts the *unsorted, two-sided* forward transform.
+        #     bochner_inverse is PRIVATE (F5) -- reach it via the qualified module path. The CAVEAT
+        #     below is exactly WHY it is not exported: bochner_forward SORTS by omega and folds
+        #     one-sided by default; ifft needs the natural fft ordering, so build the unsorted
+        #     two-sided spectrum here and pass dOmega = 2pi/(m*dt).
+        rsym = vcat(r, r[end-1:-1:2]); m = length(rsym)
+        S_unsorted = real(fft(rsym)) .* (dt / (2pi))     # what bochner_forward computes pre-sort
+        dOmega = 2pi / (m * dt)
+        r_rt = StochasticProcesses.Spectral.bochner_inverse(S_unsorted, dOmega)
+        @test isapprox(r_rt[1:n], r; atol = 1e-10)
+
+        # (5) HAND-COMPUTED spectral_variance on a tiny NON-uniform grid (bites off-by-one /
+        #     endpoint bugs the self-consistent test cannot): trapezoid of S=[1,3,2] on
+        #     omega=[0,1,3] = 0.5*(1+3)*1 + 0.5*(3+2)*2 = 2 + 5 = 7.
+        @test spectral_variance([0.0, 1.0, 3.0], [1.0, 3.0, 2.0]) == 7.0
+
+        # (5b) RECTANGULAR spectral_power vs TRAPEZOIDAL spectral_variance on a UNIFORM grid with a
+        #      NON-ZERO DC bin -> the DC-weighting difference BITES (M2). This is the CANONICAL home of
+        #      the DC-halving lesson (relocated from the old 'coarse Welch grid ~9%' experiment framing,
+        #      now stale since the experiment's Welch grid is fine). rectangular counts DC in FULL;
+        #      trapezoid halves both DC and the top bin. Pins the two integrators as DISTINCT tools.
+        ow = [0.0, 1.0, 2.0, 3.0]; Sw = [1.0, 3.0, 2.0, 4.0]
+        @test spectral_power(ow, Sw)    == 10.0   # dOmega*sum = 1*(1+3+2+4); DC counted in FULL
+        @test spectral_variance(ow, Sw) == 7.5    # trapezoid halves DC (0.5*1) and top bin -> 7.5
+
+        # (6) _onesided folding is exercised implicitly by (1)-(3) (bochner_forward folds by
+        #     default): interior bins doubled, DC not.
+    end
+
     @testset "public surface" begin
         # Regression guard on the export surface: catches a dropped `export` or a
         # re-export block that falls out of sync with a submodule.
         for f in (:brownian_motion_kernel, :exponential_kernel, :GaussianProcess,
-                  :assemble_cov, :assemble_mean, :empirical_cov, :sample_cholesky)
+                  :assemble_cov, :assemble_mean, :empirical_cov, :sample_cholesky,
+                  :bochner_forward, :spectral_variance, :spectral_power)
             @test isdefined(StochasticProcesses, f)
         end
     end
