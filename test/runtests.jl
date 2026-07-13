@@ -1,4 +1,4 @@
-using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
+using Test, StochasticProcesses, LinearAlgebra, StableRNGs
 
 @testset "StochasticProcesses" begin
     @testset "package loads" begin
@@ -117,7 +117,11 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
         @test isapprox(spectral_variance(omega, Shat), R0; rtol = 3e-2)
 
         # (2) DROPPED-1/2pi NEGATIVE CONTROL (the 2pi lesson, as a passing test):
-        #     without the 1/2pi the integral lands on 2*pi*R(0), NOT R(0).
+        #     without the 1/2pi the integral lands on 2*pi*R(0), NOT R(0). This illustrates the
+        #     consequence via spectral_variance's linearity (Shat scaled 2pi post-hoc is exactly
+        #     what a missing dt/(2pi) in bochner_forward would produce) -- it is NOT what actually
+        #     catches a real regression in that line: gate (1) above already fails hard (~2pi off,
+        #     rtol=3e-2) if bochner_forward's own dt/(2pi) factor is ever dropped.
         @test isapprox(spectral_variance(omega, 2pi .* Shat), 2pi * R0; rtol = 3e-2)
         @test !isapprox(spectral_variance(omega, 2pi .* Shat), R0; rtol = 0.2)   # provably NOT 1
 
@@ -135,9 +139,12 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
 
         # (3b) ONE-SIDED <-> TWO-SIDED CONTRACT (F4 -- the test whose absence let the shape-gate
         #      convention bug through; it locks the relationship the shape gate in (3) depends on).
-        o1, S1 = bochner_forward(r, dt; onesided = true)
+        #      o1, S1 reuse the (omega, Shat) computed above rather than recalling bochner_forward
+        #      (onesided defaults to true there too, so they are the identical call).
+        o1, S1 = omega, Shat
         o2, S2 = bochner_forward(r, dt; onesided = false)
         keep = o2 .>= 0
+        @test all(o1 .>= 0)                                   # independent of _onesided's own predicate
         @test o1 == o2[keep]                                  # same omega>=0 grid
         @test isapprox(S1[1], S2[keep][1]; atol = 1e-12)      # DC bin NOT doubled
         @test isapprox(S1[2:end], 2 .* S2[keep][2:end]; rtol = 1e-12)   # interior bins doubled
@@ -149,9 +156,11 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
         #     bochner_inverse is PRIVATE (F5) -- reach it via the qualified module path. The CAVEAT
         #     below is exactly WHY it is not exported: bochner_forward SORTS by omega and folds
         #     one-sided by default; ifft needs the natural fft ordering, so build the unsorted
-        #     two-sided spectrum here and pass dOmega = 2pi/(m*dt).
-        rsym = vcat(r, r[end-1:-1:2]); m = length(rsym)
-        S_unsorted = real(fft(rsym)) .* (dt / (2pi))     # what bochner_forward computes pre-sort
+        #     two-sided spectrum here via the same private _raw_transform bochner_forward itself
+        #     uses (single source of truth -- avoids hand-duplicating the even-extension/FFT/scale
+        #     formula in the test) and pass dOmega = 2pi/(m*dt).
+        rsym, S_unsorted, _ = StochasticProcesses.Spectral._raw_transform(r, dt)
+        m = length(rsym)
         dOmega = 2pi / (m * dt)
         r_rt = StochasticProcesses.Spectral.bochner_inverse(S_unsorted, dOmega)
         @test isapprox(r_rt[1:n], r; atol = 1e-10)
@@ -172,6 +181,13 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
 
         # (6) _onesided folding is exercised implicitly by (1)-(3) (bochner_forward folds by
         #     default): interior bins doubled, DC not.
+
+        # (7) DEGENERATE-INPUT GUARDS: before the guard, these crashed with the wrong exception
+        #     (BoundsError / an opaque FFTW planning error) or silently returned 0.0 instead of
+        #     signaling the real precondition violation.
+        @test_throws ArgumentError bochner_forward(Float64[], dt)
+        @test_throws ArgumentError spectral_variance([0.0], [5.0])
+        @test_throws ArgumentError spectral_power([0.0], [5.0])
     end
 
     @testset "public surface" begin

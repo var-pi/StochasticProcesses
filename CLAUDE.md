@@ -10,8 +10,10 @@ A computational companion to Pavliotis, *Stochastic Processes and Applications*,
 type/algorithm from the text plus a numerical experiment that checks it against a known analytic
 result — building a gallery of reproducible stochastic-process demos.
 
-**Current state:** Unit 0 (covariance core + Cholesky sampling) is complete. Units 1–7 are planned
-but not yet implemented — do not pre-stub them.
+**Current state:** Unit 0 (covariance core + Cholesky sampling) is complete. Unit 1 Phase 1
+(`spectral.jl` Bochner core: `bochner_forward`, `spectral_variance`, `spectral_power`) is complete;
+the rest of Unit 1 (Welch/raw periodogram estimators, the Unit-1 experiment) and Units 2–7 are
+planned but not yet implemented — do not pre-stub them.
 
 ## Architecture
 
@@ -25,6 +27,8 @@ The central design decision is a split between a small, tested **library** and a
   - `gaussianprocess.jl` (`GaussianProcesses`) — `GaussianProcess`, `assemble_cov`,
     `assemble_mean`, `empirical_cov`.
   - `sampling.jl` (`Sampling`) — `sample_cholesky(Σ, rng; jitter=1e-10)`.
+  - `spectral.jl` (`Spectral`) — `bochner_forward`, `spectral_variance`, `spectral_power` (public);
+    `_onesided`, `_raw_transform`, `bochner_inverse` (private helpers).
 - `test/runtests.jl` — deterministic analytic identities, tight tolerances; grows by one testset
   per phase. This is what CI runs.
 - `experiments/NN_name/` — the gallery, **one folder per unit**, each with `run.jl`, `README.md`,
@@ -96,6 +100,7 @@ These are load-bearing for reproducibility; violating one silently corrupts ever
 
 ## Roadmap (planned units, `experiments/NN_*`)
 
-0 covariance core (done) · 1 spectral/Bochner · 2 Karhunen–Loève · 3 process zoo · 4 ergodicity ·
+0 covariance core (done) · 1 spectral/Bochner (Phase 1 done, library core; experiment pending) ·
+2 Karhunen–Loève · 3 process zoo · 4 ergodicity ·
 5 random-walk → BM · 6 fractional BM · 7 SDE bridge. `src/` accretes modules; existing files are
 not restructured. Do not implement a unit until its phase-plan is being worked.
