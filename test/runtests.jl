@@ -288,7 +288,11 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
         r = [exponential_kernel(0.0, k * dt; D = D, alpha = alpha) for k in 0:n-1]
 
         # (1) PSD EMBEDDING holds for the OU/exponential kernel (Wood-Chan precondition met).
-        c = vcat(r, r[end-1:-1:2]); lambda = real(fft(c))
+        #     Reach the private eigenvalue helper directly (review fix: this is the SAME
+        #     computation sample_circulant_embedding itself uses -- a single source of
+        #     truth -- rather than a hand-duplicated copy that could drift from the
+        #     shipped code and silently stop testing it).
+        lambda = StochasticProcesses.Sampling._circulant_eigenvalues(r)
         @test all(lambda .>= -1e-10)
 
         # (2) EXACT RECONSTRUCTION at 1e-10 (the SCALING gate, no samples): the circulant
@@ -302,12 +306,17 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
         @test sample_circulant_embedding(r, StableRNG(7)) != sample_circulant_embedding(r, StableRNG(8))
 
         # (4) NEGATIVE CONTROL -- PSD-guard throw: a non-nonneg-definite sequence makes the
-        #     embedding throw. The exactness of Route 4 is load-bearing on this precondition
-        #     (forward-points to Unit 6/fBm, where it genuinely fires). This fixture was
-        #     REVIEW-VERIFIED to trip the guard (min eigenvalue lambda_0 = -0.3, review #1); still
-        #     re-confirm on the target Julia that minimum(real(fft(vcat(bad_r,bad_r[end-1:-1:2])))) < -1e-10.
+        #     embedding throw ArgumentError (review fix: was a bare untyped error() -- an
+        #     ErrorException was indistinguishable from an unrelated crash, e.g. the empty-r
+        #     FFTW-planning failure guarded against in (6) below, which is ALSO an
+        #     ErrorException; ArgumentError lets a caller catch precondition failures
+        #     specifically, matching every other guard in src/). The exactness of Route 4 is
+        #     load-bearing on this precondition (forward-points to Unit 6/fBm, where it
+        #     genuinely fires). This fixture was REVIEW-VERIFIED to trip the guard (min
+        #     eigenvalue lambda_0 = -0.3, review #1); still re-confirm on the target Julia that
+        #     minimum(real(fft(vcat(bad_r,bad_r[end-1:-1:2])))) < -1e-10.
         bad_r = [1.0, -0.9, 0.7, -0.9]
-        @test_throws ErrorException sample_circulant_embedding(bad_r, StableRNG(1))
+        @test_throws ArgumentError sample_circulant_embedding(bad_r, StableRNG(1))
 
         # (5) STATISTICAL-CONSISTENCY guard (fast CI test, echoes the Unit-0 F1 lesson): the
         #     SAMPLER's sqrt-lambda/sqrt-m scaling reproduces the Toeplitz Sigma. Loose 5%
@@ -318,6 +327,13 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
         N     = 4000
         paths = reduce(hcat, (sample_circulant_embedding(r, rng) for _ in 1:N))
         @test norm(empirical_cov(paths) .- Sigma) / norm(Sigma) < 0.05     # pin margin by dry-run
+
+        # (6) DEGENERATE-INPUT GUARD (review fix): before this guard, an empty r slipped past
+        #     the (vacuously true) PSD check and crashed inside the second fft() with an
+        #     opaque low-level "FFTW could not create plan" ErrorException instead of a clear,
+        #     catchable precondition error -- the same anti-pattern bochner_forward's isempty
+        #     guard (spectral.jl) already exists to avoid.
+        @test_throws ArgumentError sample_circulant_embedding(Float64[], StableRNG(1))
     end
 
     @testset "public surface" begin
