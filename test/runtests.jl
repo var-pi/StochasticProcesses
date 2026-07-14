@@ -190,12 +190,87 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs
         @test_throws ArgumentError spectral_power([0.0], [5.0])
     end
 
+    @testset "Spectral (periodogram): normalization + peak + raw identity" begin
+        dt = 0.1
+
+        # (1) PARSEVAL / NORMALIZATION on a DETERMINISTIC signal (no RNG): the one-sided spectral
+        #     integral of a record returns its mean-square. Pins dt, 1/2pi, and the one-sided fold.
+        #     INTEGRATOR (M2): spectral_power -- the RECTANGULAR Parseval sum, the right tool for a
+        #     discrete periodogram (DC-robust; exact in expectation at any grid). Because spectral_power
+        #     counts DC in full, the interior-cosine FIXTURE is now belt-and-suspenders / non-load-bearing
+        #     (a DC-heavy vector would also pass) -- M2 retires the N1 fixture-fragility at the source.
+        #     We keep the interior cosines anyway: orthogonal cosines give a clean Sum a_k^2/2 target.
+        L = 256; t = dt .* (0:L-1)
+        ks = (5, 11, 23); as = (1.0, 0.5, 0.3)                 # distinct interior DFT bins
+        x  = sum(a .* cos.((2pi * k / (L * dt)) .* t) for (k, a) in zip(ks, as))
+        omega, Shat = welch_psd(x, dt; nseg = 1, window = :none)
+        ms = sum(a^2 for a in as) / 2                          # mean-square of orthogonal cosines
+        @test isapprox(spectral_power(omega, Shat), ms; rtol = 5e-2)   # rectangular Parseval; pin rtol by dry-run
+
+        # (2) PEAK LOCATION: Welch of a pure cosine places its mass at omega0. Choose omega0 ON
+        #     a DFT bin (integer cycles) so argmax is unambiguous -- catches an angular-vs-ordinary
+        #     (2pi) error in the omega axis. L=256, k=8 -> f0=k/(L*dt), omega0=2pi*f0.
+        L = 256; k = 8; f0 = k / (L * dt); omega0 = 2pi * f0
+        t = dt .* (0:L-1)
+        xc = cos.(omega0 .* t)
+        oc, Sc = welch_psd(xc, dt; nseg = 1, window = :none)
+        @test isapprox(oc[argmax(Sc)], omega0; atol = (oc[2] - oc[1]))     # within one bin
+
+        # (3) STRUCTURAL IDENTITY: raw_periodogram IS the single-segment unwindowed Welch case.
+        or, Sr = raw_periodogram(x, dt)
+        ow, Sw = welch_psd(x, dt; nseg = 1, window = :none)
+        @test or == ow
+        @test Sr == Sw
+
+        # (4) HANN WINDOW-POWER (F2 -- guards U = sum(win.^2), NOT L; N4 -- BIPOLAR, Phase 2's in-CI
+        #     negative control). Welch WITH the Hann window integrates to the window-WEIGHTED mean-square
+        #     wms = sum(win.^2 .* x.^2)/sum(win.^2). INTEGRATOR (M2): spectral_power (rectangular Parseval)
+        #     -- the interior-cosine fixture is now belt-and-suspenders (a constant/DC spike would also pass,
+        #     since spectral_power counts DC in full; the DC-halving lesson lives in the Phase-1 paired test).
+        #     A U->L bug divides by L not U, i.e. rescales Shat by U/L ~ 0.37, landing at ~0.19 = 0.37*wms --
+        #     the control fires regardless of integrator.
+        Lh = 256; th = dt .* (0:Lh-1); kh = 16                 # interior bin, well off DC and Nyquist
+        xh  = cos.((2pi * kh / (Lh * dt)) .* th)
+        win = [0.5 - 0.5 * cos(2pi * j / (Lh - 1)) for j in 0:Lh-1]   # same Hann as welch_psd
+        U   = sum(abs2, win)                                   # window power
+        wms = sum(win.^2 .* xh.^2) / U                         # window-weighted mean-square (exact target)
+        oh, Sh = welch_psd(xh, dt; nseg = 1, window = :hann)
+        @test isapprox(spectral_power(oh, Sh), wms; rtol = 5e-2)              # U correct (rectangular Parseval)
+        @test !isapprox(spectral_power(oh, (U / Lh) .* Sh), wms; rtol = 0.2)  # U->L variant provably wrong
+
+        # (5) MULTI-SEGMENT AVERAGING (N2 -- welch's reason to exist, previously UNtested in CI: every
+        #     other test here uses nseg=1). With k IDENTICAL segments the average collapses to a single
+        #     segment, so Welch(nseg=k) MUST byte-equal the raw periodogram of one copy. Integrator-free
+        #     -- it bites the hop / nused / acc averaging loop directly.
+        seg = Float64[1, -2, 3, 0.5, -1.5, 2, -0.5, 1, 0.25]        # any fixed real vector
+        om, Sm   = welch_psd(vcat(seg, seg, seg, seg), dt; nseg = 4, window = :none)
+        or1, Sr1 = raw_periodogram(seg, dt)
+        @test om == or1 && Sm == Sr1
+        bad = copy(seg); bad[1] += 1.0                              # perturb ONE of the four segments
+        _, Smb = welch_psd(vcat(seg, seg, seg, bad), dt; nseg = 4, window = :none)
+        @test Smb != Sr1                                            # the average must change -> the loop bites
+
+        # OVERLAP PATH is LOAD-BEARING now (the experiment runs 50% Hann overlap, M1) -> assert it
+        # NUMERICALLY, not just finiteness. welch's normalization + one-sided fold are LINEAR, so
+        # welch(overlapping segs) == mean of the raw periodograms of those SAME segments -- an
+        # independent recompute that bites the hop / nused / acc loop (hand-counting nused too).
+        xo = Float64[2, -1, 0.5, 3, -2, 1, 0.25, -0.5]             # length 8
+        oo, So = welch_psd(xo, dt; nseg = 2, noverlap = 2, window = :none)   # L=4, hop=2 -> 3 segments
+        starts = 1:2:(length(xo) - 4 + 1)                          # 1,3,5  (hand-count of nused)
+        @test length(starts) == 3
+        raws  = [raw_periodogram(xo[s:s+3], dt) for s in starts]
+        Smean = sum(r[2] for r in raws) ./ length(starts)
+        @test oo == raws[1][1]                                     # same omega grid
+        @test isapprox(So, Smean; rtol = 1e-12)                    # the hop/nused/acc average BITES
+    end
+
     @testset "public surface" begin
         # Regression guard on the export surface: catches a dropped `export` or a
         # re-export block that falls out of sync with a submodule.
         for f in (:brownian_motion_kernel, :exponential_kernel, :GaussianProcess,
                   :assemble_cov, :assemble_mean, :empirical_cov, :sample_cholesky,
-                  :bochner_forward, :spectral_variance, :spectral_power)
+                  :bochner_forward, :spectral_variance, :spectral_power,
+                  :welch_psd, :raw_periodogram)
             @test isdefined(StochasticProcesses, f)
         end
     end

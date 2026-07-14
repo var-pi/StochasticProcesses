@@ -16,6 +16,6 @@ export sample_cholesky
 
 include("spectral.jl")
 using .Spectral
-export bochner_forward, spectral_variance, spectral_power
+export bochner_forward, spectral_variance, spectral_power, welch_psd, raw_periodogram
 
 end # module

@@ -1,7 +1,7 @@
 module Spectral
 
 using FFTW
-export bochner_forward, spectral_variance, spectral_power
+export bochner_forward, spectral_variance, spectral_power, welch_psd, raw_periodogram
 
 # Fold a two-sided (omega, S) pair onto omega >= 0, doubling interior bins so
 # that the one-sided integral still returns int S dOmega over the full line.
@@ -78,5 +78,39 @@ function spectral_power(omega, Shat)
         "the grid spacing omega[2]-omega[1] is undefined for a single point."))
     return (omega[2] - omega[1]) * sum(Shat)
 end
+
+"Welch (averaged, windowed) PSD estimate of a real series x sampled at dt.
+ CONSISTENT: its variance shrinks as the number of segments grows. Normalized
+ so the discrete int Shat dOmega -> R(0) under the 1/2pi-on-S convention of
+ (1.7)-(1.8): angular frequency omega = 2*pi*f, and the window power
+ U = sum(win.^2) is divided out (NOT the segment length). Returns a ONE-SIDED
+ spectrum by default. NOTE: the exact fold/window convention is the Unit-1
+ spec detail -- pin it so int Shat dOmega -> R(0) and unit-test that gate."
+function welch_psd(x, dt; nseg, noverlap = 0, window = :hann, onesided = true)
+    N = length(x); L = div(N, nseg)
+    win = window === :hann ?
+          [0.5 - 0.5 * cos(2pi * k / (L - 1)) for k in 0:L-1] : ones(L)
+    U = sum(abs2, win)                            # window power
+    hop = L - noverlap
+    acc = zeros(L)
+    nused = 0
+    start = 1
+    while start + L - 1 <= N
+        seg = @view x[start:start+L-1]
+        acc .+= abs2.(fft(win .* seg))
+        nused += 1; start += hop
+    end
+    Sfull = (dt / (2pi * U)) .* (acc ./ nused)    # 1/2pi-on-S normalization
+    omega_full = 2pi .* fftfreq(L, 1 / dt)
+    p = sortperm(omega_full)
+    omega_full, Sfull = omega_full[p], Sfull[p]
+    return onesided ? _onesided(omega_full, Sfull) : (omega_full, Sfull)
+end
+
+"Raw (single-shot) periodogram -- the INCONSISTENT estimator kept ONLY as the
+ Unit-1 negative control: its variance does NOT decay with record length at
+ fixed omega. Same normalization as welch_psd so the two overlay honestly."
+raw_periodogram(x, dt; onesided = true) =
+    welch_psd(x, dt; nseg = 1, window = :none, onesided = onesided)
 
 end # module
