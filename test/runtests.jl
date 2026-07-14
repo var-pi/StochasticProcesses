@@ -1,4 +1,4 @@
-using Test, StochasticProcesses, LinearAlgebra, StableRNGs
+using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
 
 @testset "StochasticProcesses" begin
     @testset "package loads" begin
@@ -283,13 +283,50 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs
         @test_throws ArgumentError welch_psd(x, dt; nseg = 1, window = :hamming)    # unknown window
     end
 
+    @testset "sample_circulant_embedding: exactness + PSD guard + consistency" begin
+        D = 1.0; alpha = 1.0; dt = 0.1; n = 32
+        r = [exponential_kernel(0.0, k * dt; D = D, alpha = alpha) for k in 0:n-1]
+
+        # (1) PSD EMBEDDING holds for the OU/exponential kernel (Wood-Chan precondition met).
+        c = vcat(r, r[end-1:-1:2]); lambda = real(fft(c))
+        @test all(lambda .>= -1e-10)
+
+        # (2) EXACT RECONSTRUCTION at 1e-10 (the SCALING gate, no samples): the circulant
+        #     eigenvalues reconstruct the covariance sequence to floating point.
+        @test isapprox(real(ifft(lambda))[1:n], r; atol = 1e-10)
+
+        # (3) SHAPE + REPRODUCIBILITY: length n, finite; same seed -> identical, different -> not.
+        x = sample_circulant_embedding(r, StableRNG(1))
+        @test length(x) == n && all(isfinite, x)
+        @test sample_circulant_embedding(r, StableRNG(7)) == sample_circulant_embedding(r, StableRNG(7))
+        @test sample_circulant_embedding(r, StableRNG(7)) != sample_circulant_embedding(r, StableRNG(8))
+
+        # (4) NEGATIVE CONTROL -- PSD-guard throw: a non-nonneg-definite sequence makes the
+        #     embedding throw. The exactness of Route 4 is load-bearing on this precondition
+        #     (forward-points to Unit 6/fBm, where it genuinely fires). This fixture was
+        #     REVIEW-VERIFIED to trip the guard (min eigenvalue lambda_0 = -0.3, review #1); still
+        #     re-confirm on the target Julia that minimum(real(fft(vcat(bad_r,bad_r[end-1:-1:2])))) < -1e-10.
+        bad_r = [1.0, -0.9, 0.7, -0.9]
+        @test_throws ErrorException sample_circulant_embedding(bad_r, StableRNG(1))
+
+        # (5) STATISTICAL-CONSISTENCY guard (fast CI test, echoes the Unit-0 F1 lesson): the
+        #     SAMPLER's sqrt-lambda/sqrt-m scaling reproduces the Toeplitz Sigma. Loose 5%
+        #     Frobenius so it is robust to MC noise at a fixed seed yet still catches a gross
+        #     scaling/wiring bug. (Deterministic reconstruction (2) does NOT cover this.)
+        Sigma = [r[abs(i - j) + 1] for i in 1:n, j in 1:n]
+        rng   = StableRNG(2024)
+        N     = 4000
+        paths = reduce(hcat, (sample_circulant_embedding(r, rng) for _ in 1:N))
+        @test norm(empirical_cov(paths) .- Sigma) / norm(Sigma) < 0.05     # pin margin by dry-run
+    end
+
     @testset "public surface" begin
         # Regression guard on the export surface: catches a dropped `export` or a
         # re-export block that falls out of sync with a submodule.
         for f in (:brownian_motion_kernel, :exponential_kernel, :GaussianProcess,
                   :assemble_cov, :assemble_mean, :empirical_cov, :sample_cholesky,
-                  :bochner_forward, :spectral_variance, :spectral_power,
-                  :welch_psd, :raw_periodogram)
+                  :sample_circulant_embedding, :bochner_forward, :spectral_variance,
+                  :spectral_power, :welch_psd, :raw_periodogram)
             @test isdefined(StochasticProcesses, f)
         end
     end
