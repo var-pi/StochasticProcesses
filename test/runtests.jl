@@ -205,7 +205,10 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs
         x  = sum(a .* cos.((2pi * k / (L * dt)) .* t) for (k, a) in zip(ks, as))
         omega, Shat = welch_psd(x, dt; nseg = 1, window = :none)
         ms = sum(a^2 for a in as) / 2                          # mean-square of orthogonal cosines
-        @test isapprox(spectral_power(omega, Shat), ms; rtol = 5e-2)   # rectangular Parseval; pin rtol by dry-run
+        # Bin-aligned orthogonal cosines with no leakage -> an EXACT DFT identity (dry-run measures
+        # relative error ~1e-15, i.e. machine precision), so pin a tight rtol: a real ~1% normalization
+        # bug (wrong doubling factor, off-by-one in nused) must fail this, not hide under 5e-2 slack.
+        @test isapprox(spectral_power(omega, Shat), ms; rtol = 1e-9)
 
         # (2) PEAK LOCATION: Welch of a pure cosine places its mass at omega0. Choose omega0 ON
         #     a DFT bin (integer cycles) so argmax is unambiguous -- catches an angular-vs-ordinary
@@ -235,7 +238,9 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs
         U   = sum(abs2, win)                                   # window power
         wms = sum(win.^2 .* xh.^2) / U                         # window-weighted mean-square (exact target)
         oh, Sh = welch_psd(xh, dt; nseg = 1, window = :hann)
-        @test isapprox(spectral_power(oh, Sh), wms; rtol = 5e-2)              # U correct (rectangular Parseval)
+        # Same exact-DFT-identity argument as test (1) above: dry-run relative error ~1e-15, so 1e-9
+        # leaves ample headroom while still catching a real ~1% U-normalization bug.
+        @test isapprox(spectral_power(oh, Sh), wms; rtol = 1e-9)              # U correct (rectangular Parseval)
         @test !isapprox(spectral_power(oh, (U / Lh) .* Sh), wms; rtol = 0.2)  # U->L variant provably wrong
 
         # (5) MULTI-SEGMENT AVERAGING (N2 -- welch's reason to exist, previously UNtested in CI: every
@@ -262,6 +267,20 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs
         Smean = sum(r[2] for r in raws) ./ length(starts)
         @test oo == raws[1][1]                                     # same omega grid
         @test isapprox(So, Smean; rtol = 1e-12)                    # the hop/nused/acc average BITES
+
+        # (6) DEGENERATE-INPUT GUARDS (review fix): before these guards existed, nseg<=0 threw an
+        #     opaque DivideError/ArgumentError from ones(L)/div, noverlap>=L made hop=L-noverlap<=0
+        #     and HUNG FOREVER (start never advances past the while condition), noverlap>L walked
+        #     start negative and threw an opaque BoundsError, L==1 (nseg==length(x)) silently
+        #     returned NaN (0/0 in the Hann window's k/(L-1)) instead of erroring, and an unknown
+        #     window symbol (a typo, or :hamming/:blackman) silently fell through to rectangular.
+        @test_throws ArgumentError welch_psd(x, dt; nseg = 0)
+        @test_throws ArgumentError welch_psd(x, dt; nseg = -1)
+        @test_throws ArgumentError welch_psd(ones(4), dt; nseg = 4)                # L == 1
+        @test_throws ArgumentError welch_psd(ones(8), dt; nseg = 2, noverlap = 4)   # hop == 0 (was: hangs)
+        @test_throws ArgumentError welch_psd(ones(8), dt; nseg = 2, noverlap = 6)   # hop < 0 (was: BoundsError)
+        @test_throws ArgumentError welch_psd(ones(8), dt; nseg = 1, noverlap = -1)  # noverlap < 0
+        @test_throws ArgumentError welch_psd(x, dt; nseg = 1, window = :hamming)    # unknown window
     end
 
     @testset "public surface" begin

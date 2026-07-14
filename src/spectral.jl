@@ -15,6 +15,17 @@ function _onesided(omega, S)
     return o, s
 end
 
+# Sort a two-sided (omega, S) pair into ascending omega order -- shared by
+# bochner_forward and welch_psd so the sort/reindex convention cannot drift
+# between the two spectral estimators. sortperm rather than relying on
+# fftfreq's known even-length layout: bochner_forward's even extension is
+# length 2*length(r)-2, which is odd for length(r)==1 (a degenerate but
+# non-crashing input), where the ascending-prefix shortcut does not hold.
+function _sorted_by_omega(omega, S)
+    p = sortperm(omega)
+    return omega[p], S[p]
+end
+
 # The unsorted, two-sided transform before folding/sorting -- the single source
 # of truth for the even-extension + FFT + dt/(2pi) scaling, shared by
 # bochner_forward and (via the qualified module path) the round-trip test, so
@@ -35,11 +46,7 @@ end
 function bochner_forward(r, dt; onesided = true)
     isempty(r) && throw(ArgumentError("bochner_forward needs a non-empty covariance sequence r"))
     rsym, S, omega = _raw_transform(r, dt)
-    # sortperm rather than relying on fftfreq's known even-length layout: the
-    # even extension is length 2*length(r)-2, which is odd for length(r)==1
-    # (a degenerate but non-crashing input), where the ascending-prefix
-    # shortcut does not hold.
-    p = sortperm(omega); omega, S = omega[p], S[p]
+    omega, S = _sorted_by_omega(omega, S)
     return onesided ? _onesided(omega, S) : (omega, S)
 end
 
@@ -84,12 +91,27 @@ end
  so the discrete int Shat dOmega -> R(0) under the 1/2pi-on-S convention of
  (1.7)-(1.8): angular frequency omega = 2*pi*f, and the window power
  U = sum(win.^2) is divided out (NOT the segment length). Returns a ONE-SIDED
- spectrum by default. NOTE: the exact fold/window convention is the Unit-1
- spec detail -- pin it so int Shat dOmega -> R(0) and unit-test that gate."
+ spectrum by default -- like bochner_forward, an even segment length L drops
+ the Nyquist bin (see _onesided). NOTE: the exact fold/window convention is the
+ Unit-1 spec detail -- pin it so int Shat dOmega -> R(0) and unit-test that gate.
+ NOTE: nseg sets the segment length L = div(length(x), nseg); with noverlap > 0
+ the number of segments actually averaged (nused) can exceed nseg."
 function welch_psd(x, dt; nseg, noverlap = 0, window = :hann, onesided = true)
+    nseg >= 1 || throw(ArgumentError("welch_psd needs nseg >= 1 (got $nseg)"))
     N = length(x); L = div(N, nseg)
-    win = window === :hann ?
-          [0.5 - 0.5 * cos(2pi * k / (L - 1)) for k in 0:L-1] : ones(L)
+    L >= 2 || throw(ArgumentError(
+        "welch_psd needs a segment length >= 2 (got L = $L from length(x) = $N, " *
+        "nseg = $nseg); use fewer segments or a longer record."))
+    0 <= noverlap < L || throw(ArgumentError(
+        "welch_psd needs 0 <= noverlap < L (got noverlap = $noverlap, L = $L); " *
+        "noverlap >= L makes the segment hop non-positive and never terminates."))
+    win = if window === :hann
+        [0.5 - 0.5 * cos(2pi * k / (L - 1)) for k in 0:L-1]
+    elseif window === :none
+        ones(L)
+    else
+        throw(ArgumentError("welch_psd: unknown window $(repr(window)); use :hann or :none"))
+    end
     U = sum(abs2, win)                            # window power
     hop = L - noverlap
     acc = zeros(L)
@@ -102,8 +124,7 @@ function welch_psd(x, dt; nseg, noverlap = 0, window = :hann, onesided = true)
     end
     Sfull = (dt / (2pi * U)) .* (acc ./ nused)    # 1/2pi-on-S normalization
     omega_full = 2pi .* fftfreq(L, 1 / dt)
-    p = sortperm(omega_full)
-    omega_full, Sfull = omega_full[p], Sfull[p]
+    omega_full, Sfull = _sorted_by_omega(omega_full, Sfull)
     return onesided ? _onesided(omega_full, Sfull) : (omega_full, Sfull)
 end
 
