@@ -1,6 +1,22 @@
-module StochasticProcesses
+"""
+    StochasticProcesses
 
-# Submodules are added one per phase (Kernels, GaussianProcesses, Sampling, Spectral).
+A computational companion to Pavliotis, *Stochastic Processes and Applications*, Ch. 1.
+
+The library is organized **by operation on the covariance operator**, not by named
+process — because a stochastic process here is nothing more than a choice of covariance
+kernel `R(t, s)`. The pieces build up in that spirit:
+
+  - `Kernels`          — the kernels themselves (Brownian motion, Ornstein–Uhlenbeck).
+  - `GaussianProcesses` — turn a kernel into a covariance matrix on a grid, and estimate
+                          that matrix back from sample paths.
+  - `Sampling`         — draw sample paths (two square-root methods: Cholesky and FFT/circulant).
+  - `Spectral`         — the Fourier side: covariance <-> spectral density, and estimators of it.
+
+Each `include` below pulls in one submodule and re-exports its public names, so `using
+StochasticProcesses` gives a flat namespace.
+"""
+module StochasticProcesses
 
 include("kernels.jl")
 using .Kernels
