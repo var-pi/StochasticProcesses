@@ -29,7 +29,7 @@ export GaussianProcess, assemble_cov, assemble_mean, empirical_cov
 
 include("sampling.jl")
 using .Sampling
-export sample_cholesky, sample_circulant_embedding
+export sample_cholesky, sample_circulant_embedding, sample_kl
 
 include("spectral.jl")
 using .Spectral

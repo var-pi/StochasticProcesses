@@ -21,7 +21,7 @@
 module Sampling
 
 using LinearAlgebra, FFTW
-export sample_cholesky, sample_circulant_embedding
+export sample_cholesky, sample_circulant_embedding, sample_kl
 
 """
     sample_cholesky(Sigma, rng; jitter = 1e-10) -> Vector
@@ -103,6 +103,39 @@ function sample_circulant_embedding(r::AbstractVector, rng)
     # The real and imaginary parts of Y are two *independent* samples with the right
     # covariance; we return the real one. (imag(Y[1:n]) would be a second, free draw.)
     return real(Y[1:n])
+end
+
+"""
+    sample_kl(lambdas, eigfuncs, rng) -> Vector
+
+Draw one zero-mean Gaussian sample by the truncated Karhunen-Loeve expansion:
+
+    X(t) = Σ_{k=1}^{K} √(λ_k) · ξ_k · e_k(t),    ξ_k ~ N(0,1) iid.
+
+This is a third square root of the covariance operator, alongside `sample_cholesky` (the triangular
+factor) and `sample_circulant_embedding` (the Bochner/FFT factor): here the square root is taken in
+the eigenbasis. With K = all modes it reproduces the (Nystrom-discretized) covariance; with K < all
+it is the OPTIMAL K-term approximation, whose discarded variance fraction is
+`kl_tail_energy(lambdas, K)`.
+
+Arguments:
+  - `lambdas`  : the K eigenvalues (variances of the coefficients), e.g. from `nystrom_eigen`.
+  - `eigfuncs` : an n_grid×K matrix whose column k is the eigenfunction e_k sampled on the grid
+                 (the second return of `nystrom_eigen`). Determines the output length n_grid.
+  - `rng`      : a random-number generator; use `StableRNG(seed)` for reproducibility.
+
+Returns a length-n_grid sample path.
+
+Like `sample_cholesky`, this draws the ZERO-MEAN law and ignores any process mean. A tiny negative
+eigenvalue (the Nystrom discretization noise floor) is clamped to zero before the square root, so it
+contributes no variance rather than throwing on √(negative).
+"""
+function sample_kl(lambdas::AbstractVector, eigfuncs::AbstractMatrix, rng)
+    K = length(lambdas)
+    size(eigfuncs, 2) == K || throw(ArgumentError(
+        "sample_kl: eigfuncs must have one column per eigenvalue (got $(size(eigfuncs, 2)) columns " *
+        "for $K eigenvalues)"))
+    return eigfuncs * (sqrt.(max.(lambdas, 0.0)) .* randn(rng, K))
 end
 
 end # module

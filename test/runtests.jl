@@ -473,12 +473,58 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
         end
     end
 
+    @testset "sample_kl: KL-truncation sampler" begin
+        nodes, w = quad_nodes_weights(1.0; n = 64)
+        lambdas, eigfuncs = nystrom_eigen(brownian_motion_kernel, nodes, w)   # full rank (K = 64)
+
+        @testset "shape & reproducibility" begin
+            x = sample_kl(lambdas, eigfuncs, StableRNG(1))
+            @test length(x) == 64 && all(isfinite, x)
+            @test sample_kl(lambdas, eigfuncs, StableRNG(7)) == sample_kl(lambdas, eigfuncs, StableRNG(7))
+            @test sample_kl(lambdas, eigfuncs, StableRNG(7)) != sample_kl(lambdas, eigfuncs, StableRNG(8))
+        end
+
+        @testset "mismatched column count throws" begin
+            @test_throws ArgumentError sample_kl(lambdas, eigfuncs[:, 1:10], StableRNG(1))
+        end
+
+        @testset "full-rank KL reproduces the discretized Sigma" begin
+            # Full KL is an exact square root of the Nystrom covariance, so empirical_cov of many draws
+            # reproduces Sigma[i,j] = min(t_i, t_j). Loose 5% Frobenius (robust to MC noise at a fixed
+            # seed) yet catches a gross wiring bug; realized ~2.6% at N = 4000.
+            Sigma = [brownian_motion_kernel(t, s) for t in nodes, s in nodes]
+            rng = StableRNG(2024); N = 4000
+            paths = reduce(hcat, (sample_kl(lambdas, eigfuncs, rng) for _ in 1:N))
+            @test norm(empirical_cov(paths) .- Sigma) / norm(Sigma) < 0.05
+        end
+
+        @testset "truncation retains the expected energy fraction" begin
+            # KL coefficients are uncorrelated with variance λ_k, so the mean discrete W-weighted energy
+            # E[Σ_i w_i X_i²] = Σ_{k≤K} λ_k. Hence energy(K-truncated)/energy(full) ≈ 1 − tail(K). This
+            # ties sample_kl's truncation to kl_tail_energy directly. atol = 0.05 covers MC scatter
+            # (~0.02 realized across seeds) at N = 4000.
+            Ktrunc = 5
+            wenergy(P) = sum(w[i] * P[i, j]^2 for i in axes(P, 1), j in axes(P, 2)) / size(P, 2)
+            N = 4000
+            # Hoist each RNG outside the generator so the SAME mutable stream advances across the N
+            # draws (as the full-rank test above does). Constructing `StableRNG(seed)` fresh inside
+            # the generator body instead would re-seed an identical generator every iteration --
+            # silently collapsing all N "samples" into N copies of one draw.
+            rng_f = StableRNG(99)
+            rng_t = StableRNG(100)
+            pf = reduce(hcat, (sample_kl(lambdas, eigfuncs, rng_f) for _ in 1:N))
+            pt = reduce(hcat, (sample_kl(lambdas[1:Ktrunc], eigfuncs[:, 1:Ktrunc], rng_t) for _ in 1:N))
+            retained = wenergy(pt) / wenergy(pf)
+            @test isapprox(retained, 1 - kl_tail_energy(lambdas, Ktrunc); atol = 0.05)
+        end
+    end
+
     @testset "public surface" begin
         # Regression guard on the exported names: catches a dropped `export` or a re-export block that
         # falls out of sync with a submodule.
         for f in (:brownian_motion_kernel, :exponential_kernel, :periodic_kernel, :GaussianProcess,
                   :assemble_cov, :assemble_mean, :empirical_cov, :sample_cholesky,
-                  :sample_circulant_embedding, :bochner_forward, :spectral_variance,
+                  :sample_circulant_embedding, :sample_kl, :bochner_forward, :spectral_variance,
                   :spectral_power, :welch_psd, :raw_periodogram,
                   :quad_nodes_weights, :nystrom_eigen, :trace_diag, :kl_tail_energy)
             @test isdefined(StochasticProcesses, f)
