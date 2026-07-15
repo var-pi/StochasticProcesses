@@ -15,7 +15,7 @@ Every unit is one of two ways to take that operator apart:
   on the lag `t−s` alone). Then the covariance lives on the frequency axis as a *spectral
   density* `S(ω)`. *(Unit 1.)*
 - **Mercer / Karhunen–Loève** — available on any **compact domain**, stationary or not. The
-  operator has an eigenbasis, and the process expands in it. *(Unit 2, planned.)*
+  operator has an eigenbasis, and the process expands in it. *(Unit 2.)*
 
 Sampling a process is a third face of the same operator: it means applying a *square root* of
 `𝒞` to white noise. Cholesky (Unit 0) is one such square root.
@@ -26,6 +26,7 @@ Sampling a process is a third face of the same operator: it means applying a *sq
 |------|-------|-----------------|
 | **0** — [`covariance core`](experiments/00_covariance_core/) | Gaussian process over a kernel `R(t,s)`; jittered-Cholesky sampling; empirical-covariance convergence | The empirical covariance of `N` sample paths converges to the true `Σ` at the Monte-Carlo rate — the fitted log–log slope collapses onto **−½**. |
 | **1** — [`spectral / Bochner`](experiments/01_spectral_bochner/) | Stationary OU process; Welch & Bochner-FFT spectral estimators; circulant-embedding sampler | Two independent estimators of the OU spectrum both land on the analytic **Lorentzian**, and integrate back to the total variance `R(0)` under a pinned 2π convention. |
+| **2** — [`KL quadrature`](experiments/02_kl_quadrature/) | Karhunen–Loève eigenbasis by symmetrized Nyström quadrature; BM closed-form check; torus contrast; KL-truncation sampler | The numerical eigenpairs match Brownian motion's closed form, `λ_k ∝ (2k−1)⁻²`, the trace identity pins assembly, and the torus coincidence `λ_k = R̂(k)` holds exactly on the circle but breaks on the interval. |
 
 ## Conventions
 
