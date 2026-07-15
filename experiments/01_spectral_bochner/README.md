@@ -110,6 +110,7 @@ scatter, not a fixed tolerance. Gate (a)'s 5% budget sits at ~3σ of the integra
 scatter — the lever for that margin is `N_GRID` (sd ∝ 1/√N_GRID), not the threshold; this draw
 happened to land at 0.16%. Gate (c) is deterministic at floating-point scale.
 
-This experiment is Monte-Carlo — run it locally (`julia --project run.jl`); it is **not** part
+This experiment is Monte-Carlo — run it locally (`julia --project=.. run.jl`, from this folder,
+using the shared `experiments/` env); it is **not** part
 of CI. The four figures above are committed artifacts, and the deterministic identities it
 relies on are covered by the Phase 1–3 testsets.

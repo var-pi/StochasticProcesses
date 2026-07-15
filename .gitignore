@@ -3,7 +3,8 @@
 *.jl.mem
 /docs/build/
 .DS_Store
-# Manifest.toml is intentionally committed (reproducibility) — do NOT ignore it.
+# Manifest.toml is intentionally committed (reproducibility) — do NOT ignore it. This covers both
+# the root env's Manifest.toml and experiments/Manifest.toml.
 # experiments/**/figures/ are committed artifacts — do NOT ignore them.
 
 # LaTeX build artifacts (compiled .pdf and source .tex are tracked)

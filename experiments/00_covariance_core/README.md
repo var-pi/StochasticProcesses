@@ -69,5 +69,6 @@ table and the slope `−0.6211`. A `FAIL`, or any drift from that slope, means t
 changed — not an unlucky draw. (Margin at this config: `|slope + ½| = 0.121 < 2.5·SE = 0.133`,
 ≈ 9%.)
 
-This experiment is Monte-Carlo — run it locally (`julia --project run.jl`); it is **not** part
+This experiment is Monte-Carlo — run it locally (`julia --project=.. run.jl`, from this folder,
+using the shared `experiments/` env); it is **not** part
 of CI. The two figures above are committed artifacts.

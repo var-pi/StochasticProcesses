@@ -32,7 +32,9 @@ The central design decision is a split between a small, tested **library** and a
 - `test/runtests.jl` — deterministic analytic identities, tight tolerances; grows by one testset
   per phase. This is what CI runs.
 - `experiments/NN_name/` — the gallery, **one folder per unit**, each with `run.jl`, `README.md`,
-  and committed `figures/`. Currently only `00_covariance_core/`.
+  and committed `figures/`. Currently `00_covariance_core/` and `01_spectral_bochner/`. The
+  `experiments/` folder carries its own committed `Project.toml` + `Manifest.toml` (a shared env
+  that `dev`s the package) — run scripts under `--project=experiments`.
 - `docs/plan/` — the master plan (`.tex` source + tracked compiled PDF).
 
 ## Commands
@@ -40,7 +42,8 @@ The central design decision is a split between a small, tested **library** and a
 - Run the test suite (what CI runs): `julia --project -e 'using Pkg; Pkg.test()'`
 - Instantiate the pinned environment: `julia --project -e 'using Pkg; Pkg.instantiate()'`
 - Run an experiment locally (writes figures, prints the slope gate — **not** run in CI):
-  `julia --project experiments/00_covariance_core/run.jl`
+  `julia --project=experiments experiments/00_covariance_core/run.jl` (experiments have their own
+  env that `dev`s the package — see the Environment convention below)
 
 ## Non-negotiable conventions
 
@@ -53,7 +56,12 @@ These are load-bearing for reproducibility; violating one silently corrupts ever
   large → biased covariance. Default `jitter = 1e-10`.
 - **CI vs. local:** deterministic tests run in CI (`Pkg.test()` only); Monte-Carlo experiments stay
   out of CI — run them locally and **commit their figures**.
-- **Environment:** `Manifest.toml` is intentionally committed — do not gitignore it. Likewise
+- **Environment:** `Manifest.toml` is intentionally committed — do not gitignore it. This holds for
+  *both* environments: the root package env, and the separate `experiments/` env
+  (`experiments/Project.toml` + `experiments/Manifest.toml`), which `dev`s the package via a
+  relative `path = ".."` so experiment scripts can `using StochasticProcesses` as a real dependency
+  (this is also what makes the editor's LanguageServer resolve the package instead of flagging
+  "Missing reference"). Run experiments with `--project=experiments`. Likewise
   `experiments/**/figures/` are committed artifacts.
 - **Headless plotting:** experiments set `ENV["GKSwstype"] = "100"` before `gr()` so figures render
   with no display (CI/agent shells).

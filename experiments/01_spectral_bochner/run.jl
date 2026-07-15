@@ -22,7 +22,7 @@
 #               ω they approximate the one-sided density 2*S(ω). Shape checks use 2*S;
 #               integral checks use R(0).
 #
-#  Run:  julia --project experiments/01_spectral_bochner/run.jl
+#  Run:  julia --project=experiments experiments/01_spectral_bochner/run.jl
 #  Monte-Carlo, so NOT run in CI; the figures it writes are committed.
 #  Reproducibility conventions: see ../../README.md#conventions.
 # ============================================================================

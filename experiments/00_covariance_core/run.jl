@@ -11,7 +11,7 @@
 #  is exactly singular — which makes it both the main check and, at the end, a
 #  negative control for the Cholesky nugget.
 #
-#  Run:  julia --project experiments/00_covariance_core/run.jl
+#  Run:  julia --project=experiments experiments/00_covariance_core/run.jl
 #  This is a Monte-Carlo study, so it is NOT run in CI; the two figures it writes
 #  are committed. Reproducibility conventions: see ../../README.md#conventions.
 # ============================================================================

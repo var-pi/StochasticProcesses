@@ -40,12 +40,13 @@ own concrete values (seed, jitter, grid).
 - **CI vs. local.** Deterministic analytic identities run in CI (`Pkg.test()`); Monte-Carlo
   experiments are run and verified **locally**, with their figures committed as artifacts.
 - **Environment.** `Manifest.toml` is committed (not gitignored) so the pinned environment is
-  reproducible.
+  reproducible — both the root package env and the separate `experiments/` env (which `dev`s the
+  package; experiments run under `--project=experiments`).
 
 ## Commands
 
 ```sh
 julia --project -e 'using Pkg; Pkg.test()'            # run the test suite (what CI runs)
 julia --project -e 'using Pkg; Pkg.instantiate()'     # instantiate the pinned environment
-julia --project experiments/00_covariance_core/run.jl # run an experiment (writes figures)
+julia --project=experiments experiments/00_covariance_core/run.jl # run an experiment (writes figures)
 ```
