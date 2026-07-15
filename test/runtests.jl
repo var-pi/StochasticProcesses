@@ -397,13 +397,90 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
         end
     end
 
+    @testset "KL — quadrature Nystrom eigenproblem" begin
+        @testset "quad_nodes_weights" begin
+            nodes, w = quad_nodes_weights(1.0; n = 3)                      # trapezoid, hand-checked
+            @test nodes == [0.0, 0.5, 1.0]
+            @test w == [0.25, 0.5, 0.25]
+            @test sum(w) ≈ 1.0                                              # integrates the interval length
+            pnodes, pw = quad_nodes_weights(1.0; n = 4, rule = :periodic)
+            @test pnodes == [0.0, 0.25, 0.5, 0.75]                          # no endpoint (torus)
+            @test pw == fill(0.25, 4)
+            @test_throws ArgumentError quad_nodes_weights(1.0; n = 1)
+            @test_throws ArgumentError quad_nodes_weights(1.0; n = 4, rule = :simpson)
+            # T <= 0 is degenerate (zero/negative domain length): without this guard, T = 0 gives
+            # all-zero weights, which would silently divide by zero inside nystrom_eigen (W^{-1/2}).
+            @test_throws ArgumentError quad_nodes_weights(0.0; n = 4)
+        end
+
+        @testset "trace_diag and the exact trace identity" begin
+            nodes, w = quad_nodes_weights(1.0; n = 200)
+            # Trapezoid is EXACT for the linear BM diagonal R(t,t)=t: ∫_0^1 t dt = 1/2 (NOT T·R(0)=0).
+            @test trace_diag(brownian_motion_kernel, nodes, w) ≈ 0.5 rtol = 1e-12
+            lambdas, _ = nystrom_eigen(brownian_motion_kernel, nodes, w)
+            # Σ λ = tr(W^{1/2} K W^{1/2}) = trace_diag, to machine precision -- an exact assembly check,
+            # NOT a re-run of the eigen formula (it pins K and W assembly against each other).
+            @test sum(lambdas) ≈ trace_diag(brownian_motion_kernel, nodes, w) atol = 1e-12
+            # Stationary specialization Σ λ = T·R(0) holds on the torus kernel (R(t,t)=D):
+            pnodes, pw = quad_nodes_weights(1.0; n = 200, rule = :periodic)
+            lp, _ = nystrom_eigen(periodic_kernel, pnodes, pw)
+            @test sum(lp) ≈ 1.0 rtol = 1e-12                                # T·R(0) = 1·D = 1
+        end
+
+        @testset "Brownian-motion eigenpairs match the closed form (Example 1.29)" begin
+            nodes, w = quad_nodes_weights(1.0; n = 400)
+            lambdas, eigfuncs = nystrom_eigen(brownian_motion_kernel, nodes, w)
+            lam_bm(k)  = (2 / ((2k - 1) * pi))^2
+            efun_bm(k) = sqrt(2) .* sin.((k - 0.5) * pi .* nodes)
+            for k in 1:5                                                    # top modes, above the noise floor
+                @test isapprox(lambdas[k], lam_bm(k); rtol = 1e-2)          # realized rel err ≤ 1.05e-4 at n=400
+                e = eigfuncs[:, k]
+                dot(w .* e, efun_bm(k)) < 0 && (e = -e)                     # align the arbitrary sign to analytic
+                L2 = sqrt(sum(w .* (e .- efun_bm(k)).^2))                   # discrete W-weighted L² error
+                @test L2 < 1e-3                                             # realized ~1e-15 (BM eigfns are exact sines)
+            end
+            # eigenfunctions are orthonormal in the W-weighted inner product (NOT the Euclidean one)
+            @test isapprox(sum(w .* eigfuncs[:, 1].^2), 1.0; atol = 1e-10)
+            @test isapprox(sum(w .* eigfuncs[:, 1] .* eigfuncs[:, 2]), 0.0; atol = 1e-10)
+        end
+
+        @testset "kl_tail_energy" begin
+            lam = [4.0, 3.0, 2.0, 1.0]                                      # total 10
+            @test kl_tail_energy(lam, 0) == 1.0                            # nothing kept
+            @test kl_tail_energy(lam, 4) == 0.0                            # everything kept
+            @test kl_tail_energy(lam, 2) ≈ 0.3                            # (2+1)/10, hand value
+            @test_throws ArgumentError kl_tail_energy(lam, 5)
+        end
+
+        @testset "torus coincidence and its failure off the circle" begin
+            alpha = 1.0
+            Rhat(k) = 2 * alpha * (1 - (-1)^k * exp(-alpha / 2)) / (alpha^2 + (2pi * k)^2)
+            n = 512
+            pnodes, pw = quad_nodes_weights(1.0; n = n, rule = :periodic)
+            lam, _ = nystrom_eigen((t, s) -> periodic_kernel(t, s; alpha = alpha), pnodes, pw)
+            # Analytic torus spectrum sorted descending, with the CORRECT circulant multiplicities:
+            # DC (k=0) and Nyquist (k=n/2) appear once, every interior k twice (±k degenerate). This
+            # gives length exactly n (n even here) -- no reliance on a min()-truncation to drop a
+            # spurious extra Nyquist copy.
+            ana = sort(vcat(Rhat(0), repeat([Rhat(k) for k in 1:div(n, 2) - 1], inner = 2), Rhat(div(n, 2))); rev = true)
+            @test maximum(abs.(lam .- ana)) < 1e-5                          # n=512 realizes ~1.5e-6 (aliasing O(1/n²))
+            # NEGATIVE CONTROL: the SAME kernel on a sub-period interval [0, 1/2] (where it is just the OU
+            # kernel) no longer matches Rhat -- the coincidence is a TORUS fact, broken by a boundary that
+            # turns the eigenfunctions into Sturm-Liouville sines.
+            inodes, iw = quad_nodes_weights(0.5; n = n)                    # Dirichlet interval, half a period
+            lami, _ = nystrom_eigen((t, s) -> periodic_kernel(t, s; alpha = alpha), inodes, iw)
+            @test maximum(abs.(lami[1:20] .- ana[1:20])) > 1e-2            # realized ~0.36: fails on purpose
+        end
+    end
+
     @testset "public surface" begin
         # Regression guard on the exported names: catches a dropped `export` or a re-export block that
         # falls out of sync with a submodule.
         for f in (:brownian_motion_kernel, :exponential_kernel, :periodic_kernel, :GaussianProcess,
                   :assemble_cov, :assemble_mean, :empirical_cov, :sample_cholesky,
                   :sample_circulant_embedding, :bochner_forward, :spectral_variance,
-                  :spectral_power, :welch_psd, :raw_periodogram)
+                  :spectral_power, :welch_psd, :raw_periodogram,
+                  :quad_nodes_weights, :nystrom_eigen, :trace_diag, :kl_tail_energy)
             @test isdefined(StochasticProcesses, f)
         end
     end
