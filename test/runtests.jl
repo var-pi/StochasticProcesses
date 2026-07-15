@@ -42,6 +42,21 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
             @test exponential_kernel(0.3, 0.7; D = 2.0, alpha = 3.0) ≈
                   exponential_kernel(0.0, 0.4; D = 2.0, alpha = 3.0)
         end
+
+        @testset "periodic_kernel (torus)" begin
+            @test periodic_kernel(0.2, 0.7) == periodic_kernel(0.7, 0.2)          # symmetry
+            @test periodic_kernel(0.3, 0.3; D = 2.0) == 2.0                        # R(0) = D
+            # wrap-around: the distance from 0.1 to 0.9 is the SHORT arc 0.2, not 0.8. A missing wrap
+            # (using |t-s| directly) would give exp(-0.8) here -- an O(1) error this test catches.
+            @test periodic_kernel(0.1, 0.9; alpha = 1.0) ≈ exp(-0.2)
+            @test periodic_kernel(0.1, 0.9) != exponential_kernel(0.1, 0.9)        # the wrap distinguishes it from OU
+            # inside a half-period the periodic distance is just |t-s| (hand value)
+            @test periodic_kernel(0.2, 0.5; D = 1.0, alpha = 2.0) ≈ exp(-2 * 0.3)
+            # positive-definite on a uniform circle grid: all eigenvalues >= 0 (the full-spectrum claim)
+            circle = range(0, 1; length = 17)[1:end-1]        # 16 distinct circle points (drop the wrap point)
+            Σ = assemble_cov(GaussianProcess(periodic_kernel), circle)
+            @test all(eigvals(Matrix(Σ)) .>= -1e-10)
+        end
     end
 
     # -------------------------------------------------- assembly & empirical cov
@@ -385,7 +400,7 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
     @testset "public surface" begin
         # Regression guard on the exported names: catches a dropped `export` or a re-export block that
         # falls out of sync with a submodule.
-        for f in (:brownian_motion_kernel, :exponential_kernel, :GaussianProcess,
+        for f in (:brownian_motion_kernel, :exponential_kernel, :periodic_kernel, :GaussianProcess,
                   :assemble_cov, :assemble_mean, :empirical_cov, :sample_cholesky,
                   :sample_circulant_embedding, :bochner_forward, :spectral_variance,
                   :spectral_power, :welch_psd, :raw_periodogram)
