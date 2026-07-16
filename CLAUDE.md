@@ -10,10 +10,12 @@ A computational companion to Pavliotis, *Stochastic Processes and Applications*,
 type/algorithm from the text plus a numerical experiment that checks it against a known analytic
 result — building a gallery of reproducible stochastic-process demos.
 
-**Current state:** Unit 0 (covariance core + Cholesky sampling) is complete. Unit 1 Phase 1
-(`spectral.jl` Bochner core: `bochner_forward`, `spectral_variance`, `spectral_power`) is complete;
-the rest of Unit 1 (Welch/raw periodogram estimators, the Unit-1 experiment) and Units 2–7 are
-planned but not yet implemented — do not pre-stub them.
+**Current state:** Units 0 (covariance core + Cholesky sampling), 1 (spectral/Bochner: the
+`spectral.jl` core, Welch/raw periodogram estimators, circulant-embedding sampler, and the
+`01_spectral_bochner` experiment), and 2 (Karhunen–Loève) are complete. Unit 2 comprises five
+commits: `periodic_kernel` (torus contrast kernel), the `kl.jl` module (symmetrized Nyström
+eigenproblem), the `sample_kl` KL-truncation sampler, the `02_kl_quadrature` experiment, and its
+READMEs. Units 3–7 are planned but not yet implemented — do not pre-stub them.
 
 ## Architecture
 
@@ -23,16 +25,22 @@ The central design decision is a split between a small, tested **library** and a
 - `src/` — the library, organized **by operation on the covariance operator** (kernels, the
   diagonalizations, the square roots), *not* by named process. A process is just a choice of kernel.
   - `StochasticProcesses.jl` — top-level module; grows by one `include` + re-export per phase.
-  - `kernels.jl` (`Kernels`) — `brownian_motion_kernel`, `exponential_kernel` (OU).
+  - `kernels.jl` (`Kernels`) — `brownian_motion_kernel`, `exponential_kernel` (OU),
+    `periodic_kernel` (torus, Unit 2).
   - `gaussianprocess.jl` (`GaussianProcesses`) — `GaussianProcess`, `assemble_cov`,
     `assemble_mean`, `empirical_cov`.
-  - `sampling.jl` (`Sampling`) — `sample_cholesky(Σ, rng; jitter=1e-10)`.
-  - `spectral.jl` (`Spectral`) — `bochner_forward`, `spectral_variance`, `spectral_power` (public);
-    `_onesided`, `_raw_transform`, `bochner_inverse` (private helpers).
+  - `sampling.jl` (`Sampling`) — `sample_cholesky(Σ, rng; jitter=1e-10)`,
+    `sample_circulant_embedding(r, rng)`, `sample_kl(lambdas, eigfuncs, rng)` (Unit 2).
+  - `spectral.jl` (`Spectral`) — `bochner_forward`, `spectral_variance`, `spectral_power`,
+    `welch_psd`, `raw_periodogram` (public); `_onesided`, `_sorted_by_omega`, `_raw_transform`,
+    `bochner_inverse` (private helpers).
+  - `kl.jl` (`KL`, Unit 2) — `quad_nodes_weights`, `nystrom_eigen` (symmetrized: solves
+    `W^{1/2}KW^{1/2}g=λg`, `e=W^{-1/2}g`), `trace_diag`, `kl_tail_energy`.
 - `test/runtests.jl` — deterministic analytic identities, tight tolerances; grows by one testset
   per phase. This is what CI runs.
 - `experiments/NN_name/` — the gallery, **one folder per unit**, each with `run.jl`, `README.md`,
-  and committed `figures/`. Currently `00_covariance_core/` and `01_spectral_bochner/`. The
+  and committed `figures/`. Currently `00_covariance_core/`, `01_spectral_bochner/`, and
+  `02_kl_quadrature/` (Unit 2). The
   `experiments/` folder carries its own committed `Project.toml` + `Manifest.toml` (a shared env
   that `dev`s the package) — run scripts under `--project=experiments`.
 - `docs/plan/` — the master plan (`.tex` source + tracked compiled PDF).
@@ -76,24 +84,6 @@ These are load-bearing for reproducibility; violating one silently corrupts ever
   (2–3×) of the fitted slope's own standard error — never a fixed absolute tolerance. Seed so the
   result is deterministic given the seed.
 
-## Workflow (from the agent working agreement)
-
-- **One phase = exactly one git commit.** A phase is an independently-verifiable increment that
-  leaves the package loadable with green tests and introduces nothing a later phase depends on.
-  Commit only when asked; the commit message names the phase and the pass conditions verified.
-- **TDD with a mutation gate.** Write tests first; run them against the *unimplemented* feature — if
-  a test passes before the feature exists it is vacuous, so rewrite it to fail. Then implement and
-  fix-until-green. A test that stays green no matter what the code does is noise.
-- **Every feature ships a negative control** — a test that is *supposed* to fail, demonstrating a
-  load-bearing hypothesis. Unit-0 exemplar: the *same* singular Brownian-motion Σ (all-zero `t=0`
-  row, `R(0,s)=0`) throws `PosDefException` at `jitter = 0` and succeeds once `ε ≳ 1e-10` — proving
-  the nugget matters for the real matrix, not a contrived one.
-- **READMEs are the durable evidence of understanding.** Each `experiments/NN_*/README.md` must
-  state the concept, why the check is the right one, what it proves, the recorded config (seed,
-  jitter, grid), and the expected numeric outcome — treat it as a first-class deliverable.
-- **Code quality.** Every variable is self-explanatory or carries a comment. Let docstrings carry
-  the *why* (the physics, the convention, why a jitter is honest not cosmetic).
-
 ## Gotchas specific to this code
 
 - **`paths` orientation is `n_grid × N` — one sample path per COLUMN.** A transpose silently
@@ -108,7 +98,7 @@ These are load-bearing for reproducibility; violating one silently corrupts ever
 
 ## Roadmap (planned units, `experiments/NN_*`)
 
-0 covariance core (done) · 1 spectral/Bochner (Phase 1 done, library core; experiment pending) ·
-2 Karhunen–Loève · 3 process zoo · 4 ergodicity ·
+0 covariance core (done) · 1 spectral/Bochner (done) · 2 Karhunen–Loève (done) ·
+3 process zoo · 4 ergodicity ·
 5 random-walk → BM · 6 fractional BM · 7 SDE bridge. `src/` accretes modules; existing files are
 not restructured. Do not implement a unit until its phase-plan is being worked.
