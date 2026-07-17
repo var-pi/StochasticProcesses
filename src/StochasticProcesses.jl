@@ -21,7 +21,7 @@ module StochasticProcesses
 
 include("kernels.jl")
 using .Kernels
-export brownian_motion_kernel, exponential_kernel, periodic_kernel
+export brownian_motion_kernel, exponential_kernel, periodic_kernel, brownian_bridge_kernel
 
 include("gaussianprocess.jl")
 using .GaussianProcesses

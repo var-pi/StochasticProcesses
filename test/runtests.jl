@@ -57,6 +57,21 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
             Σ = assemble_cov(GaussianProcess(periodic_kernel), circle)
             @test all(eigvals(Matrix(Σ)) .>= -1e-10)
         end
+
+        @testset "brownian_bridge_kernel" begin
+            @test brownian_bridge_kernel(0.3, 0.7) == brownian_bridge_kernel(0.7, 0.3)  # symmetry
+            @test brownian_bridge_kernel(0.3, 0.7) == 0.09       # hand value: 0.3 - 0.3*0.7 = 0.3 - 0.21
+            # both endpoints pinned to zero: a min(t,s)-only bug (dropping -t*s) passes the t=0
+            # case but fails t=1, so both must be checked to catch it.
+            @test brownian_bridge_kernel(0.0, 0.4) == 0.0
+            @test brownian_bridge_kernel(1.0, 0.4) == 0.0
+            @test brownian_bridge_kernel(0.5, 0.5) == 0.25       # variance at midpoint: 0.5*(1-0.5)
+            @test brownian_bridge_kernel(0.3, 0.7) != brownian_motion_kernel(0.3, 0.7)  # distinguished from BM
+            # positive-definite on an INTERIOR grid (excluding 0, 1, where rows vanish identically)
+            interior = range(0.05, 0.95; length = 12)
+            Σb = assemble_cov(GaussianProcess(brownian_bridge_kernel), interior)
+            @test all(eigvals(Matrix(Σb)) .>= -1e-10)
+        end
     end
 
     # -------------------------------------------------- assembly & empirical cov
@@ -522,7 +537,8 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
     @testset "public surface" begin
         # Regression guard on the exported names: catches a dropped `export` or a re-export block that
         # falls out of sync with a submodule.
-        for f in (:brownian_motion_kernel, :exponential_kernel, :periodic_kernel, :GaussianProcess,
+        for f in (:brownian_motion_kernel, :exponential_kernel, :periodic_kernel,
+                  :brownian_bridge_kernel, :GaussianProcess,
                   :assemble_cov, :assemble_mean, :empirical_cov, :sample_cholesky,
                   :sample_circulant_embedding, :sample_kl, :bochner_forward, :spectral_variance,
                   :spectral_power, :welch_psd, :raw_periodogram,

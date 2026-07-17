@@ -12,7 +12,7 @@
 # ============================================================================
 module Kernels
 
-export brownian_motion_kernel, exponential_kernel, periodic_kernel
+export brownian_motion_kernel, exponential_kernel, periodic_kernel, brownian_bridge_kernel
 
 """
     brownian_motion_kernel(t, s) -> Float64
@@ -86,5 +86,26 @@ function periodic_kernel(t, s; D=1.0, alpha=1.0)
     d = min(delta, 1 - delta)             # shorter arc distance on the circle
     return D * exp(-alpha * d)
 end
+
+"""
+    brownian_bridge_kernel(t, s) -> Float64
+
+Covariance of the standard Brownian bridge on [0, 1]:  R(t, s) = min(t, s) - t*s.
+
+The bridge is Brownian motion conditioned to return to 0 at time 1 (Pavliotis §1.5).
+Subtracting `t*s` from the Brownian-motion kernel is exactly what pins the second
+endpoint: it leaves the process non-stationary, but now zero at *both* ends of the
+interval, not just at t = 0.
+
+`t`, `s` are two times restricted to [0, 1] (the domain is fixed, unlike
+`exponential_kernel`/`periodic_kernel`, which take a rate parameter — the bridge has
+no free constant to tune). Key values worth having in mind:
+  - R(t, t)  = t*(1 - t)          -- the variance profile, zero at both ends, maximal at t=1/2.
+  - R(0, s)  = 0                  -- pinned at the start, same as Brownian motion.
+  - R(1, s)  = min(1, s) - s = 0  -- pinned at the end too (min(1,s) = s for s in [0,1]).
+A kernel that only implements `min(t,s)` and forgets the `-t*s` term would still pass
+the t=0 pin but silently fail the t=1 one -- both endpoints must be checked to catch it.
+"""
+brownian_bridge_kernel(t, s) = min(t, s) - t * s
 
 end # module
