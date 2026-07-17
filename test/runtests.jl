@@ -534,6 +534,48 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
         end
     end
 
+    @testset "KS statistic, hand-computed" begin
+        # Uniform(0,1) target: F(x) = x, so every gap in the KS sup is computable by hand.
+        # xs = [0.1, 0.5, 0.9] (already sorted), n = 3:
+        #   i=1: upper = 1/3 - 0.1 = 7/30 ; lower = 0.1 - 0/3 = 3/30
+        #   i=2: upper = 2/3 - 0.5 = 1/6  ; lower = 0.5 - 1/3 = 1/6
+        #   i=3: upper = 3/3 - 0.9 = 1/10 ; lower = 0.9 - 2/3 = 7/30
+        # max over all six gaps = 7/30, attained at both ends (a symmetric fixture, so it
+        # cannot by itself distinguish an upper-only from a lower-only implementation).
+        @testset "symmetric case: sup = 7/30" begin
+            @test isapprox(ks_statistic([0.1, 0.5, 0.9], x -> x), 7 / 30; atol = 1e-12)
+        end
+
+        @testset "unsorted input: guards a missing sort" begin
+            # Same multiset as above, fed out of order. If ks_statistic forgot to sort, the
+            # i/n and (i-1)/n bounds would attach to the wrong order statistic and the result
+            # would drift from 7/30.
+            @test isapprox(ks_statistic([0.9, 0.1, 0.5], x -> x), 7 / 30; atol = 1e-12)
+        end
+
+        @testset "bunched left: the UPPER gap attains the sup" begin
+            # xs = [0.1, 0.2], n = 2:
+            #   i=1: upper = 1/2 - 0.1 = 0.4 ; lower = 0.1 - 0   = 0.1
+            #   i=2: upper = 2/2 - 0.2 = 0.8 ; lower = 0.2 - 1/2 = -0.3
+            # sup = 0.8 (the upper gap at i=2). A D-minus-only implementation (checking only
+            # the lower gap) would report max(0.1, -0.3) = 0.1, missing the true sup entirely.
+            @test isapprox(ks_statistic([0.1, 0.2], x -> x), 0.8; atol = 1e-12)
+        end
+
+        @testset "bunched right (mirror): the LOWER gap attains the sup" begin
+            # xs = [0.8, 0.9], n = 2:
+            #   i=1: upper = 1/2 - 0.8 = -0.3 ; lower = 0.8 - 0   = 0.8
+            #   i=2: upper = 2/2 - 0.9 = 0.1  ; lower = 0.9 - 1/2 = 0.4
+            # sup = 0.8 (the lower gap at i=1). A D-plus-only implementation (checking only
+            # the upper gap) would report max(-0.3, 0.1) = 0.1, missing the true sup entirely.
+            @test isapprox(ks_statistic([0.8, 0.9], x -> x), 0.8; atol = 1e-12)
+        end
+
+        @testset "empty input throws" begin
+            @test_throws ArgumentError ks_statistic(Float64[], x -> x)
+        end
+    end
+
     @testset "public surface" begin
         # Regression guard on the exported names: catches a dropped `export` or a re-export block that
         # falls out of sync with a submodule.
@@ -542,7 +584,8 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
                   :assemble_cov, :assemble_mean, :empirical_cov, :sample_cholesky,
                   :sample_circulant_embedding, :sample_kl, :bochner_forward, :spectral_variance,
                   :spectral_power, :welch_psd, :raw_periodogram,
-                  :quad_nodes_weights, :nystrom_eigen, :trace_diag, :kl_tail_energy)
+                  :quad_nodes_weights, :nystrom_eigen, :trace_diag, :kl_tail_energy,
+                  :ks_statistic)
             @test isdefined(StochasticProcesses, f)
         end
     end

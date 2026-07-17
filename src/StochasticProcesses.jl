@@ -13,6 +13,8 @@ kernel `R(t, s)`. The pieces build up in that spirit:
   - `Sampling`         — draw sample paths (two square-root methods: Cholesky and FFT/circulant).
   - `Spectral`         — the Fourier side: covariance <-> spectral density, and estimators of it.
   - `KL`               — the Mercer/Karhunen–Loève eigenbasis: the second diagonalization.
+  - `GOF`              — the one deliberate exception: goodness-of-fit statistics (shared
+                          across units, not an operation on the covariance operator).
 
 Each `include` below pulls in one submodule and re-exports its public names, so `using
 StochasticProcesses` gives a flat namespace.
@@ -38,5 +40,9 @@ export bochner_forward, spectral_variance, spectral_power, welch_psd, raw_period
 include("kl.jl")
 using .KL
 export quad_nodes_weights, nystrom_eigen, trace_diag, kl_tail_energy
+
+include("gof.jl")
+using .GOF
+export ks_statistic
 
 end # module
