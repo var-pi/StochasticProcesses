@@ -12,10 +12,17 @@ result — building a gallery of reproducible stochastic-process demos.
 
 **Current state:** Units 0 (covariance core + Cholesky sampling), 1 (spectral/Bochner: the
 `spectral.jl` core, Welch/raw periodogram estimators, circulant-embedding sampler, and the
-`01_spectral_bochner` experiment), and 2 (Karhunen–Loève) are complete. Unit 2 comprises five
-commits: `periodic_kernel` (torus contrast kernel), the `kl.jl` module (symmetrized Nyström
-eigenproblem), the `sample_kl` KL-truncation sampler, the `02_kl_quadrature` experiment, and its
-READMEs. Units 3–7 are planned but not yet implemented — do not pre-stub them.
+`01_spectral_bochner` experiment), 2 (Karhunen–Loève), and 3 (process zoo / reconciliation) are
+complete. Unit 2 comprises five commits: `periodic_kernel` (torus contrast kernel), the `kl.jl`
+module (symmetrized Nyström eigenproblem), the `sample_kl` KL-truncation sampler, the
+`02_kl_quadrature` experiment, and its READMEs. Unit 3 comprises six commits: `brownian_bridge_kernel`
+(a catalogue kernel), the `gof.jl` module (`ks_statistic` — deliberately the one `src/` module
+that is *not* an operation on the covariance operator; a shared goodness-of-fit utility reused by
+the future Unit 5), and the `03_process_zoo` experiment across three phases (route equivalence via a
+split-half bootstrap null; the two-step distributional identities — Gaussianity by construction →
+App. B.5 → Cramér–Wold, plus the KL-coefficient independence check; and the Toeplitz/Szegő
+cross-check against the analytic un-normalized symbol `2π·S`), plus its READMEs. Units 4–7 are
+planned but not yet implemented — do not pre-stub them.
 
 ## Architecture
 
@@ -26,7 +33,7 @@ The central design decision is a split between a small, tested **library** and a
   diagonalizations, the square roots), *not* by named process. A process is just a choice of kernel.
   - `StochasticProcesses.jl` — top-level module; grows by one `include` + re-export per phase.
   - `kernels.jl` (`Kernels`) — `brownian_motion_kernel`, `exponential_kernel` (OU),
-    `periodic_kernel` (torus, Unit 2).
+    `periodic_kernel` (torus, Unit 2), `brownian_bridge_kernel` (Unit 3).
   - `gaussianprocess.jl` (`GaussianProcesses`) — `GaussianProcess`, `assemble_cov`,
     `assemble_mean`, `empirical_cov`.
   - `sampling.jl` (`Sampling`) — `sample_cholesky(Σ, rng; jitter=1e-10)`,
@@ -36,11 +43,14 @@ The central design decision is a split between a small, tested **library** and a
     `bochner_inverse` (private helpers).
   - `kl.jl` (`KL`, Unit 2) — `quad_nodes_weights`, `nystrom_eigen` (symmetrized: solves
     `W^{1/2}KW^{1/2}g=λg`, `e=W^{-1/2}g`), `trace_diag`, `kl_tail_energy`.
+  - `gof.jl` (`GOF`, Unit 3) — `ks_statistic(samples, cdf)` (KS sup-distance to a target CDF).
+    The one module *not* organized as an operation on the covariance operator — a deterministic-
+    tested goodness-of-fit utility, shared with Unit 5.
 - `test/runtests.jl` — deterministic analytic identities, tight tolerances; grows by one testset
   per phase. This is what CI runs.
 - `experiments/NN_name/` — the gallery, **one folder per unit**, each with `run.jl`, `README.md`,
-  and committed `figures/`. Currently `00_covariance_core/`, `01_spectral_bochner/`, and
-  `02_kl_quadrature/` (Unit 2). The
+  and committed `figures/`. Currently `00_covariance_core/`, `01_spectral_bochner/`,
+  `02_kl_quadrature/` (Unit 2), and `03_process_zoo/` (Unit 3). The
   `experiments/` folder carries its own committed `Project.toml` + `Manifest.toml` (a shared env
   that `dev`s the package) — run scripts under `--project=experiments`.
 - `docs/plan/` — the master plan (`.tex` source + tracked compiled PDF).
@@ -99,6 +109,6 @@ These are load-bearing for reproducibility; violating one silently corrupts ever
 ## Roadmap (planned units, `experiments/NN_*`)
 
 0 covariance core (done) · 1 spectral/Bochner (done) · 2 Karhunen–Loève (done) ·
-3 process zoo · 4 ergodicity ·
+3 process zoo (done) · 4 ergodicity ·
 5 random-walk → BM · 6 fractional BM · 7 SDE bridge. `src/` accretes modules; existing files are
 not restructured. Do not implement a unit until its phase-plan is being worked.
