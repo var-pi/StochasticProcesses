@@ -256,5 +256,72 @@ scatter!(pnc, [ss_stat], [1]; label = "c^-1/2 (correct, in band)", markersize = 
 scatter!(pnc, [ctrl_stat], [1]; label = "c^-1/3 (control, outside)", markersize = 7, marker = :xcross)
 savefig(pnc, joinpath(OUTDIR, "negative_control.png"))
 
-@printf("\nrecorded: T_OU=%.1f N_GRID=%d D=%.1f alpha=%.1f N_ROUTE=%d N_SPLIT=%d N_BRIDGE=%d c=%.1f K_KL=%d jitter=%.0e seed=%d seed_dist=%d\n",
-        T_OU, N_GRID, D, ALPHA, N_ROUTE, N_SPLIT, N_BRIDGE, C_SCALE, K_KL, JITTER, SEED, SEED_DIST)
+# ============================================================================
+#  Phase 5 — Toeplitz/Szegő cross-check + Welch overlay + aggregate
+# ----------------------------------------------------------------------------
+#  On [0,T] the OU integral-operator eigenvalues converge (Grenander–Szegő) to
+#  the UN-NORMALIZED symbol Rhat(ω)=2D/(α²+ω²)=2π·S(ω) — NOT the 1/2π density S
+#  (nystrom_eigen diagonalizes ∫R e ds; Unit 2's λ_k=R̂(k) is the anchor). The
+#  convergence is asymptotic AND distributional (weakest at the spectrum edges),
+#  so we gate the bulk gap g(T)=max_{k∈bulk}|λ_k−Rhat(ω_k)| shrinking as a fitted
+#  log–log slope below a fixed negative threshold — deterministic (analytic
+#  Rhat), a fixed absolute margin, not an SE multiple; monotonicity NOT required.
+#  The Welch-vs-analytic overlay is the pedagogical reconciliation of the two
+#  diagonalizations; it is explicitly NOT what the gate computes.
+# ============================================================================
+const T_LADDER = [4, 8, 16, 32, 64]
+const NODES_PER_UNIT = 32
+const K_BULK = 30
+const RES_FLOOR = 1e-3
+const XCHECK_THRESH = -0.5
+const SEED_XCHECK = 141421
+const N_WELCH = 4096
+const DT_WELCH = 0.05
+
+S_density(ω) = D / (pi * (ALPHA^2 + ω^2))              # Unit-1 1/2π density
+Rhat(ω) = 2 * pi * S_density(ω)                        # un-normalized symbol = 2π·S(ω); derived, not duplicated, to prevent drift
+
+gs = Float64[]
+for Tx in T_LADDER
+    nx = NODES_PER_UNIT * Tx
+    nod, wt = quad_nodes_weights(float(Tx); n = nx)
+    λx, _ = nystrom_eigen(ou, nod, wt)
+    khi = min(K_BULK, findlast(k -> λx[k] > RES_FLOOR * λx[1], eachindex(λx)))
+    push!(gs, maximum(abs(λx[k] - Rhat(k * pi / Tx)) for k in 2:khi))
+end
+Xdes = hcat(ones(length(T_LADDER)), log.(float.(T_LADDER)))
+xco = Xdes \ log.(gs)
+xslope = xco[2]
+xcheck_ok = xslope < XCHECK_THRESH
+
+@printf("\ncross-check g(T)=max_{k∈bulk}|λ_k − Rhat(kπ/T)| (analytic Rhat=2π·S):\n")
+for (Tx, g) in zip(T_LADDER, gs)
+    @printf("  T=%3d  g=%.5f\n", Tx, g)
+end
+@printf("  fitted slope log g vs log T = %.4f (reported, not claimed vs theory); threshold < %.2f -> %s\n",
+        xslope, XCHECK_THRESH, xcheck_ok ? "PASS" : "FAIL")
+
+# cross_check.png — the headline log–log ladder with fitted slope
+pxc = plot(float.(T_LADDER), gs; xscale = :log10, yscale = :log10, marker = :circle,
+           label = "g(T) = max bulk gap", xlabel = "T", ylabel = "g(T)",
+           title = @sprintf("Toeplitz/Szegő cross-check: slope %.3f", xslope))
+plot!(pxc, float.(T_LADDER), exp.(Xdes * xco); linestyle = :dash, label = @sprintf("fit slope %.3f", xslope))
+savefig(pxc, joinpath(OUTDIR, "cross_check.png"))
+
+# welch_overlay.png — visual reconciliation ONLY (own seed; not gated)
+rngx = StableRNG(SEED_XCHECK)
+r_welch = [ou(0.0, k * DT_WELCH) for k in 0:N_WELCH-1]
+xw = sample_circulant_embedding(r_welch, rngx)
+ωw, Sw = welch_psd(xw, DT_WELCH; nseg = 16, window = :hann)
+pwo = plot(ωw, Sw; label = "Welch PSD (one-sided)", xlabel = "ω", ylabel = "S(ω)",
+           title = "Welch estimate vs analytic 2·S(ω)", xlims = (0, 8))
+plot!(pwo, ωw, 2 .* S_density.(ωw); linestyle = :dash, label = "2·S(ω) analytic")
+savefig(pwo, joinpath(OUTDIR, "welch_overlay.png"))
+
+# --- aggregate ---------------------------------------------------------------
+route_ok = all_in
+dist_ok  = ss_ok && ctrl_out && cw_ok && kl_ok && br_ok
+println("\n", (route_ok && dist_ok && xcheck_ok) ? "ALL GATES: PASS" : "ALL GATES: FAIL")
+
+@printf("recorded: T_OU=%.1f N_GRID=%d D=%.1f alpha=%.1f N_ROUTE=%d N_SPLIT=%d N_BRIDGE=%d c=%.1f K_KL=%d T_ladder=%s jitter=%.0e seed=%d seed_dist=%d seed_xcheck=%d\n",
+        T_OU, N_GRID, D, ALPHA, N_ROUTE, N_SPLIT, N_BRIDGE, C_SCALE, K_KL, string(T_LADDER), JITTER, SEED, SEED_DIST, SEED_XCHECK)
