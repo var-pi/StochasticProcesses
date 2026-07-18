@@ -16,6 +16,7 @@
 # ============================================================================
 using StochasticProcesses
 using StableRNGs, LinearAlgebra, Printf, Plots
+using SpecialFunctions: erf
 
 # type-7 (linear-interpolation) quantile on an already-sorted vector — matches
 # Statistics.quantile without pulling Statistics into the experiments env.
@@ -142,5 +143,118 @@ scatter!(preq, rescaled, fill(1, 3); label = "route pairs", markersize = 6)
 vline!(preq, [theory]; linestyle = :dash, label = "2σ₁ (null-scale theory)")
 savefig(preq, joinpath(OUTDIR, "route_equivalence.png"))
 
-@printf("\nrecorded: T_OU=%.1f N_GRID=%d D=%.1f alpha=%.1f N_ROUTE=%d N_SPLIT=%d jitter=%.0e seed=%d\n",
-        T_OU, N_GRID, D, ALPHA, N_ROUTE, N_SPLIT, JITTER, SEED)
+# ============================================================================
+#  Phase 4 — distributional identities (own RNG stream; cannot perturb above)
+# ----------------------------------------------------------------------------
+#  A distributional identity is a two-step chain: the time-changed process is
+#  Gaussian BY CONSTRUCTION (a linear map of a Gaussian process), so App. B.5
+#  turns a full-covariance match into equality in law; then Cramér–Wold
+#  projections KS-test each 1-D functional, catching a non-Gaussian impostor
+#  that carries the right covariance. Uses its own StableRNG(SEED_DIST), so it
+#  is independent of the route-equivalence stream above.
+# ============================================================================
+const SEED_DIST = 20250101
+const C_SCALE   = 4.0
+const K_KL      = 8
+const N_BRIDGE  = 200
+
+normcdf(z) = 0.5 * (1 + erf(z / sqrt(2)))
+kscrit(β)  = sqrt(-0.5 * log(β / 2))                        # Kolmogorov crit at level β
+stephens(Dks, n) = (sqrt(n) + 0.12 + 0.11 / sqrt(n)) * Dks  # finite-sample modified statistic
+
+rng4 = StableRNG(SEED_DIST)
+
+# BM reference and its OWN split-half null band (BM-scale, NOT the OU band above)
+Σ_bm = Matrix(assemble_cov(GaussianProcess(brownian_motion_kernel), bm_grid))
+bm_paths = reduce(hcat, (sample_cholesky(Σ_bm, rng4; jitter = JITTER) for _ in 1:N_ROUTE))
+Σ̂_bm = empirical_cov(bm_paths)
+bm_lo, bm_hi = splithalf_band(bm_paths, N_SPLIT, rng4)
+
+# Self-similarity c^{-1/2}W(ct) =d W(t). Draw W(ct) once, scale for Y and the wrong-exponent control.
+Σ_scaled = Matrix(assemble_cov(GaussianProcess(brownian_motion_kernel), C_SCALE .* bm_grid))
+wct = reduce(hcat, (sample_cholesky(Σ_scaled, rng4; jitter = JITTER) for _ in 1:N_ROUTE))
+Y       = C_SCALE^(-0.5) .* wct
+Y_wrong = C_SCALE^(-1/3) .* wct
+ss_stat   = sqrt(2) * norm(empirical_cov(Y) .- Σ̂_bm)
+ctrl_stat = sqrt(2) * norm(empirical_cov(Y_wrong) .- Σ̂_bm)
+ss_ok    = bm_lo <= ss_stat <= bm_hi
+ctrl_out = !(bm_lo <= ctrl_stat <= bm_hi)
+
+# Cramér–Wold: fixed 1-D functionals of Y, each KS-tested vs N(0, aᵀΣ_BM a). Bonferroni family α=0.01.
+cw_funcs = [ ones(N_GRID) ./ N_GRID,
+             collect(range(-1, 1; length = N_GRID)),
+             collect(range(-1, 1; length = N_GRID)).^2 .- 1/3,
+             sin.(2π .* bm_grid),
+             [1.0; zeros(N_GRID - 2); -1.0],
+             normalize(sin.(7 .* bm_grid) .+ cos.(3 .* bm_grid)) ]
+cw_labels = ["mean", "ramp", "quadratic", "sine", "endpoint diff", "wiggle"]
+cw_crit = kscrit(0.01 / length(cw_funcs))
+cw_stats = [stephens(ks_statistic([dot(a, @view Y[:, j]) for j in 1:N_ROUTE],
+                                   x -> normcdf(x / sqrt(a' * Σ_bm * a))), N_ROUTE) for a in cw_funcs]
+cw_ok = all(cw_stats .< cw_crit)
+
+# KL coefficients on OU: ξ_k = Σ_i w_i X_i e_k(t_i) ~ N(0, λ_k), pairwise uncorrelated.
+ou_paths = reduce(hcat, (sample_cholesky(Σ_ou, rng4; jitter = JITTER) for _ in 1:N_ROUTE))
+ξ = ou_eigfuncs[:, 1:K_KL]' * (ou_w .* ou_paths)                 # K_KL × N_ROUTE
+ξn = ξ ./ sqrt.(sum(abs2, ξ; dims = 2))
+Ccorr = ξn * ξn'
+maxoff = maximum(abs.(Ccorr - I))
+kl_crit = kscrit(0.01 / K_KL)
+kl_stats = [stephens(ks_statistic(ξ[k, :], x -> normcdf(x / sqrt(ou_lambdas[k]))), N_ROUTE) for k in 1:K_KL]
+kl_ok = maxoff < 0.10 && all(kl_stats .< kl_crit)
+
+# Bridge endpoints pinned at t=0,1 via the covariance/Cholesky route (the time-change formula
+# B_t=(1-t)W(t/(1-t)) can't be evaluated at t=1). R(0,0)=R(1,1)=0, so after the jitter nugget the
+# endpoint diagonal is JITTER and X(endpoint)=√JITTER·z — pinned to the jitter floor.
+Σ_br = Matrix(assemble_cov(GaussianProcess(brownian_bridge_kernel), bridge_grid))
+br_paths = reduce(hcat, (sample_cholesky(Σ_br, rng4; jitter = JITTER) for _ in 1:N_BRIDGE))
+maxend = maximum(abs.(vcat(br_paths[1, :], br_paths[end, :])))
+br_tol = 10 * sqrt(JITTER)
+br_ok = maxend <= br_tol
+
+println("\ndistributional identities (SEED_DIST=$SEED_DIST):")
+@printf("  self-similarity c^-1/2 W(ct): √2‖Σ̂_Y−Σ̂_BM‖=%.3f in bm_band [%.3f,%.3f] -> %s\n",
+        ss_stat, bm_lo, bm_hi, ss_ok ? "PASS" : "FAIL")
+@printf("  negative control c^-1/3:      √2‖Σ̂_wrong−Σ̂_BM‖=%.3f -> %s\n",
+        ctrl_stat, ctrl_out ? "outside band (fails on purpose)" : "IN BAND?!")
+@printf("  Cramér–Wold: max Stephens KS=%.3f < crit=%.3f (family α=0.01, %d proj) -> %s\n",
+        maximum(cw_stats), cw_crit, length(cw_funcs), cw_ok ? "PASS" : "FAIL")
+@printf("  KL coeffs: max|corr offdiag|=%.4f (<0.10), max KS=%.3f < crit=%.3f -> %s\n",
+        maxoff, maximum(kl_stats), kl_crit, kl_ok ? "PASS" : "FAIL")
+@printf("  bridge endpoints: max|X(0)|,|X(1)|=%.2e ≤ %.2e -> %s\n",
+        maxend, br_tol, br_ok ? "PASS" : "FAIL")
+println("distributional identities -> ", (ss_ok && ctrl_out && cw_ok && kl_ok && br_ok) ? "PASS" : "FAIL")
+
+# Cramér–Wold panel: per-projection empirical CDF (solid) vs its Gaussian target (dashed).
+pcw = plot(; layout = (2, 3), size = (1200, 650), legend = false)
+for (i, a) in enumerate(cw_funcs)
+    v = a' * Σ_bm * a
+    proj = sort([dot(a, @view Y[:, j]) for j in 1:N_ROUTE])
+    ecdf = (1:N_ROUTE) ./ N_ROUTE
+    plot!(pcw[i], proj, ecdf; title = @sprintf("%s (KS*=%.2f)", cw_labels[i], cw_stats[i]),
+          xlabel = "aᵀX", ylabel = "CDF")
+    plot!(pcw[i], proj, normcdf.(proj ./ sqrt(v)); linestyle = :dash)
+end
+savefig(pcw, joinpath(OUTDIR, "cramer_wold.png"))
+
+# KL-coefficient panel: |correlation| heatmap (≈ I) and ξ_1, ξ_K ECDFs vs N(0,λ_k).
+pkl1 = heatmap(abs.(Ccorr); title = @sprintf("|corr(ξ)| (max offdiag %.3f)", maxoff),
+               aspect_ratio = :equal, clims = (0, 1))
+pkl2 = plot(; title = "KL coeff ECDF vs N(0,λ_k)", xlabel = "ξ_k", ylabel = "CDF", legend = :bottomright)
+for k in (1, K_KL)
+    s = sort(ξ[k, :]); ecdf = (1:N_ROUTE) ./ N_ROUTE
+    plot!(pkl2, s, ecdf; label = "ξ_$k emp")
+    plot!(pkl2, s, normcdf.(s ./ sqrt(ou_lambdas[k])); linestyle = :dash, label = "N(0,λ_$k)")
+end
+savefig(plot(pkl1, pkl2; layout = (1, 2), size = (1000, 400)), joinpath(OUTDIR, "kl_coefficients.png"))
+
+# Negative-control panel: the correct c^-1/2 lands in the BM null band, the wrong c^-1/3 far outside.
+pnc = plot([bm_lo, bm_hi], [1, 1]; linewidth = 8, alpha = 0.3, label = "BM split-half null band",
+           xlabel = "√2·‖Σ̂−Σ̂_BM‖_F", ylims = (0.5, 1.5), yticks = false, legend = :top,
+           title = "Self-similarity: right vs wrong exponent")
+scatter!(pnc, [ss_stat], [1]; label = "c^-1/2 (correct, in band)", markersize = 7)
+scatter!(pnc, [ctrl_stat], [1]; label = "c^-1/3 (control, outside)", markersize = 7, marker = :xcross)
+savefig(pnc, joinpath(OUTDIR, "negative_control.png"))
+
+@printf("\nrecorded: T_OU=%.1f N_GRID=%d D=%.1f alpha=%.1f N_ROUTE=%d N_SPLIT=%d N_BRIDGE=%d c=%.1f K_KL=%d jitter=%.0e seed=%d seed_dist=%d\n",
+        T_OU, N_GRID, D, ALPHA, N_ROUTE, N_SPLIT, N_BRIDGE, C_SCALE, K_KL, JITTER, SEED, SEED_DIST)
