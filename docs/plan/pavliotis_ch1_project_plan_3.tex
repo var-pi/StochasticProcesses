@@ -10,7 +10,6 @@
 \usepackage{xcolor}
 \usepackage{titlesec}
 \usepackage{fancyhdr}
-\usepackage{listings}
 \usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
 \usepackage{parskip}
 \setlength{\emergencystretch}{3em}
@@ -18,7 +17,6 @@
 % ---------- Colors ----------
 \definecolor{hubblue}{RGB}{31,73,125}
 \definecolor{extgray}{RGB}{110,110,110}
-\definecolor{codebg}{RGB}{245,245,245}
 
 % ---------- Section styling ----------
 \titleformat{\section}{\normalfont\Large\bfseries\color{hubblue}}{\thesection}{1em}{}
@@ -32,49 +30,22 @@
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.3pt}
 
-% ---------- Code listing style ----------
-\lstset{
-  basicstyle=\ttfamily\small,
-  backgroundcolor=\color{codebg},
-  frame=single,
-  rulecolor=\color{gray!40},
-  breaklines=true,
-  columns=fullflexible,
-  showstringspaces=false,
-  xleftmargin=8pt,
-  xrightmargin=8pt,
-  aboveskip=8pt,
-  belowskip=8pt
-}
-
 % ---------- Custom commands ----------
 \newcommand{\extnote}[1]{{\small\color{extgray}\emph{[External / not in Pavliotis: #1]}}}
 \newcommand{\pav}[1]{{\small\color{hubblue}(Pavliotis, #1)}}
 \newcommand{\Dstar}{D_{\star}}
 
-% Unit metadata block
-\newenvironment{unitmeta}{%
-  \begin{description}[style=sameline,leftmargin=1.4cm,font=\bfseries\color{hubblue}]
+% Feature-brief field list (the master-plan altitude replacement for the old
+% per-unit implementation-contract tables, which were deleted: call signatures,
+% code, and tolerances are owned downstream, not here).
+\newenvironment{brief}{%
+  \begin{description}[style=sameline,leftmargin=2.3cm,font=\bfseries\color{hubblue}]
 }{%
   \end{description}
 }
 
-% Per-unit implementation-contract signature table
-\newenvironment{contracttable}{%
-  \par\smallskip\noindent{\bfseries\color{hubblue}Implementation contract.}\par\nopagebreak\smallskip
-  \small
-  \setlength{\extrarowheight}{2pt}%
-  \noindent\begin{tabular}{@{}p{3.5cm}p{6.8cm}p{4.2cm}@{}}
-  \toprule
-  \textbf{Role} & \textbf{Call signature} & \textbf{Produces / returns} \\
-  \midrule
-}{%
-  \bottomrule
-  \end{tabular}\par\smallskip
-}
-
 \title{\textbf{A Computational Companion to Pavliotis, Chapter 1}\\[4pt]
-\large Project Plan: Covariance Operators, Spectral Theory, and the Karhunen--Lo\`eve Expansion}
+\large Master Plan: Covariance Operators, Spectral Theory, and the Karhunen--Lo\`eve Expansion}
 \author{Stefan}
 \date{\today}
 
@@ -83,7 +54,32 @@
 \maketitle
 
 \begin{abstract}
-\noindent This document specifies a six-to-eight-week computational project in Julia that deepens understanding of Chapter~1 of Pavliotis, \emph{Stochastic Processes and Applications}, by implementing its core objects and verifying each implementation against an analytic prediction. The project is organized around a single hub --- the covariance operator $\mathcal{C}$ --- with two diagonalizing bases (Fourier/Bochner and Mercer/Karhunen--Lo\`eve), \emph{four} factorizations used for sampling (Cholesky, KL truncation, random Fourier series, and circulant embedding), and ergodicity as the mechanism that closes the loop between one simulated sample path and the analytic objects it is checked against. The plan deliberately excludes machine-learning and SciML content. At the working budget of \textbf{15\,h/week} ($6\times 2.5$\,h) the committed core is \textbf{Units 0--7}: the covariance/spectral spine (Units 0--4), Brownian motion as a scaling limit (Unit~5), fractional Brownian motion (Unit~6), and a forward-pointing SDE bridge to Chapter~3 (Unit~7). Each unit now carries an explicit \emph{implementation contract} (the \texttt{src/} functions it exercises, with signatures, and the data its \texttt{run.jl} must produce), an \emph{exact analytic target}, a \emph{pass/fail predicate}, a \emph{negative control} that shows the wrong thing failing, and a one-line \emph{README argument} --- since the READMEs, not the code, are the durable evidence of understanding. Statements drawn directly from the text are cited by section/theorem number; statements that are standard but external to Pavliotis are flagged explicitly. All citations are to the project's copy of the text, which is the \emph{November 11, 2015 draft} (numbering differs from the published edition), and were checked directly against it.
+\noindent This is the \emph{master plan} for a computational project in Julia that deepens
+understanding of Chapter~1 of Pavliotis, \emph{Stochastic Processes and Applications}, by
+implementing its core objects and verifying each against an analytic prediction. It owns the
+project's through-line, its decomposition into feature briefs, the repository architecture and its
+limits, the cross-cutting conventions, a consolidated risk register, and the budget. It
+deliberately does \emph{not} carry call signatures, code, or numerical tolerances: those are
+resolved downstream --- in the per-commit plans that each feature brief is handed to, and in the
+shipped code itself --- and a copy here would be a second, drifting source of truth. The project is
+organized around a single hub, the covariance operator $\mathcal{C}$, with two diagonalizing bases
+(Fourier/Bochner and Mercer/Karhunen--Lo\`eve) and \emph{four} mathematical square roots used for
+sampling (Cholesky, KL truncation, random Fourier series, circulant embedding) --- of which
+\emph{three are implemented} (Cholesky, KL, circulant); the random-Fourier series is described as
+structure but not built, and this costs no capability because circulant embedding is itself the
+Bochner square root. Ergodicity closes the loop between one simulated path and the analytic objects
+it is checked against. The plan excludes machine-learning and SciML content. At the working budget
+of \textbf{15\,h/week} ($6\times 2.5$\,h) the full planned ladder is \textbf{Units 0--7}: the
+covariance/spectral spine (Units 0--4), Brownian motion as a scaling limit (Unit~5), fractional
+Brownian motion (Unit~6), and a forward-pointing SDE bridge to Chapter~3 (Unit~7). \textbf{Units
+0--3 are shipped}; Units~4--5 are committed core; Unit~6 then Unit~7 are the cut order if the buffer
+is consumed. Each unit is written as a feature brief --- its one idea, the claim it proves and the
+exact analytic target it is checked against, the falsifier it is designed to exhibit, its place in
+the build DAG, the repository areas it touches, its effort and dominant risk, and its status.
+Statements drawn from the text are cited by section/theorem number; statements standard but external
+to Pavliotis are flagged explicitly. All citations are to the project's copy of the text, the
+\emph{November 11, 2015 draft} (numbering differs from the published edition), checked directly
+against it.
 \end{abstract}
 
 \tableofcontents
@@ -94,88 +90,166 @@
 
 \subsection{The hub: the covariance operator}
 
-Every object studied in Chapter~1 is a fact about a single operator. For a mean-zero, second-order process $X_t$, $t\in[0,T]$, with continuous covariance $R(t,s) = \mathbb{E}(X_tX_s)$, define the integral operator
+Every object studied in Chapter~1 is a fact about a single operator. For a mean-zero, second-order
+process $X_t$, $t\in[0,T]$, with continuous covariance $R(t,s) = \mathbb{E}(X_tX_s)$, define the
+integral operator
 \begin{equation}
 (\mathcal{C}f)(t) \;:=\; \int_0^T R(t,s)\,f(s)\,ds, \qquad f \in L^2[0,T].
 \label{eq:covop}
 \end{equation}
-\pav{eqn.~1.33} This is self-adjoint, nonnegative, and (for continuous $R$) compact and Hilbert--Schmidt \pav{Exercises 21--22}. Everything downstream is one of two operations performed on $\mathcal{C}$.
+\pav{eqn.~1.33} This is self-adjoint, nonnegative, and (for continuous $R$) compact and
+Hilbert--Schmidt \pav{Exercises 21--22}. Everything downstream is one of two operations performed on
+$\mathcal{C}$.
 
 \subsection{Two diagonalizations}
 
 \paragraph{Fourier / Bochner (gated by stationarity).}
-If $X_t$ is weakly stationary, $R(t,s) = R(t-s)$ is a function of a single lag, and Bochner's theorem applies:
+If $X_t$ is weakly stationary, $R(t,s) = R(t-s)$ is a function of a single lag, and Bochner's theorem
+applies:
 \begin{equation}
 R(\tau) \;=\; \int_{\mathbb{R}} e^{i\omega\tau}\,\rho(d\omega),
 \label{eq:bochner}
 \end{equation}
-for a unique nonnegative measure $\rho$ on $\mathbb{R}$ with $\rho(\mathbb{R}) = R(0)$ \pav{Thm.~1.14}. When $\rho$ is absolutely continuous, $\rho(d\omega) = S(\omega)\,d\omega$ with
+for a unique nonnegative measure $\rho$ on $\mathbb{R}$ with $\rho(\mathbb{R}) = R(0)$
+\pav{Thm.~1.14}. When $\rho$ is absolutely continuous, $\rho(d\omega) = S(\omega)\,d\omega$ with
 \begin{equation}
 S(\omega) = \frac{1}{2\pi}\int_{-\infty}^{\infty} e^{-i\omega\tau}R(\tau)\,d\tau,
 \qquad
 R(\tau) = \int_{-\infty}^{\infty} e^{i\omega\tau}S(\omega)\,d\omega.
 \label{eq:spectraldensity}
 \end{equation}
-\pav{eqns.~1.7--1.8} $S(\omega)$ is the \emph{spectral density}; it lives on the frequency axis, not on the sample space --- a distinction worth stating explicitly since both objects are conventionally denoted $\omega$. Equations~\eqref{eq:spectraldensity} form a Fourier transform pair and invert by the Fourier inversion theorem, independently of any symmetry of $R$. Realness and evenness of $R$ add only that $S$ is itself real and even --- so the sign of $i$ in the exponent is immaterial (one may replace $e^{\pm i\omega\tau}$ by $\cos\omega\tau$); the $1/2\pi$ is placed on the $S$-side purely by convention. With this convention $\int_{\mathbb{R}} S(\omega)\,d\omega = R(0)$ (total variance), which fixes the normalization every estimator in Unit~1 must reproduce.
+\pav{eqns.~1.7--1.8} $S(\omega)$ is the \emph{spectral density}; it lives on the frequency axis, not
+on the sample space --- a distinction worth stating explicitly since both objects are conventionally
+denoted $\omega$. Equations~\eqref{eq:spectraldensity} form a Fourier transform pair and invert by
+the Fourier inversion theorem, independently of any symmetry of $R$. Realness and evenness of $R$ add
+only that $S$ is itself real and even --- so the sign of $i$ in the exponent is immaterial (one may
+replace $e^{\pm i\omega\tau}$ by $\cos\omega\tau$); the $1/2\pi$ is placed on the $S$-side purely by
+convention. With this convention $\int_{\mathbb{R}} S(\omega)\,d\omega = R(0)$ (total variance),
+which fixes the normalization every estimator in Unit~1 must reproduce.
 
 \paragraph{Mercer / Karhunen--Lo\`eve (general, needs a compact domain).}
-Independently of stationarity, the spectral theorem for compact self-adjoint operators gives a countable orthonormal eigenbasis $\{e_k\}$ of $\mathcal{C}$ with eigenvalues $\lambda_k \geq 0$,
+Independently of stationarity, the spectral theorem for compact self-adjoint operators gives a
+countable orthonormal eigenbasis $\{e_k\}$ of $\mathcal{C}$ with eigenvalues $\lambda_k \geq 0$,
 \begin{equation}
 \mathcal{C}e_k = \lambda_k e_k, \qquad R(t,s) = \sum_{k=1}^{\infty}\lambda_k\,e_k(t)\,e_k(s),
 \label{eq:kl-eigen}
 \end{equation}
-\pav{eqn.~1.32; Mercer's theorem, stated inline (unnumbered) in \S1.5} and the Karhunen--Lo\`eve expansion
+\pav{eqn.~1.32; Mercer's theorem, stated inline (unnumbered) in \S1.5} and the Karhunen--Lo\`eve
+expansion
 \begin{equation}
-X_t = \sum_{k=1}^{\infty} \xi_k\, e_k(t), \qquad \xi_k = \int_0^T X_t\, e_k(t)\,dt,\quad \mathbb{E}(\xi_k\xi_\ell) = \lambda_k\delta_{k\ell},
+X_t = \sum_{k=1}^{\infty} \xi_k\, e_k(t), \qquad \xi_k = \int_0^T X_t\, e_k(t)\,dt,\quad
+\mathbb{E}(\xi_k\xi_\ell) = \lambda_k\delta_{k\ell},
 \label{eq:kl}
 \end{equation}
-\pav{Thm.~1.28 (Karhunen--Lo\`eve)} converging in $L^2$, uniformly in $t$. If $X_t$ is Gaussian, the $\xi_k$ are independent (uncorrelated \emph{and} jointly Gaussian), and
+\pav{Thm.~1.28 (Karhunen--Lo\`eve)} converging in $L^2$, uniformly in $t$. If $X_t$ is Gaussian, the
+$\xi_k$ are independent (uncorrelated \emph{and} jointly Gaussian), and
 \begin{equation}
 X_t = \sum_{k=1}^{\infty} \sqrt{\lambda_k}\,\xi_k\, e_k(t), \qquad \xi_k \overset{\text{iid}}{\sim} N(0,1).
 \label{eq:kl-gaussian}
 \end{equation}
-\pav{eqn.~1.36} The eigenvalues are simultaneously (i) eigenvalues of the covariance operator and (ii) variances of the independent stochastic coefficients in the expansion --- one fact, two readings.
+\pav{eqn.~1.36} The eigenvalues are simultaneously (i) eigenvalues of the covariance operator and
+(ii) variances of the independent stochastic coefficients in the expansion --- one fact, two
+readings.
 
 \paragraph{When the two diagonalizations coincide.}
-The Fourier basis diagonalizes $\mathcal{C}$ exactly when $\mathcal{C}$ is a convolution operator, which requires the domain to be a group under addition and the kernel to be translation-invariant. The interval $[0,T]$ is not a group; the circle (torus) is. On the torus, $\mathcal{C}$ is a genuine convolution, its eigenfunctions are forced to be the characters $e^{ikt}$, and
+The Fourier basis diagonalizes $\mathcal{C}$ exactly when $\mathcal{C}$ is a convolution operator,
+which requires the domain to be a group under addition and the kernel to be translation-invariant.
+The interval $[0,T]$ is not a group; the circle (torus) is. On the torus, $\mathcal{C}$ is a genuine
+convolution, its eigenfunctions are forced to be the characters $e^{ikt}$, and
 \begin{equation}
 \lambda_k = \hat R(k) \qquad \text{(exactly)},
 \label{eq:torus-coincidence}
 \end{equation}
-the $k$-th eigenvalue equals the $k$-th Fourier coefficient of $R$ --- the KL sequence and the (discrete, atomic) spectral measure are the same object. On $[0,T]$ the boundary breaks translation invariance: the KL eigenfunctions of Brownian motion, for instance, are Sturm--Liouville sine modes with eigenvalues $\lambda_n \propto (2n-1)^{-2}$ \pav{Example 1.29}, not Fourier modes, and \eqref{eq:torus-coincidence} fails. \extnote{the general asymptotic recovery $\lambda_k \to \hat R(\omega_k)$ as $T\to\infty$ --- where $\hat R(\omega)=2\pi S(\omega)$ is the \emph{un-normalized} operator symbol, since the eigenproblem $\int R(t,s)e(s)\,ds=\lambda e$ carries no $1/2\pi$ --- is a Toeplitz-operator fact (Grenander--Szeg\H{o}), not covered in Pavliotis. Stated precisely, Szeg\H{o} controls the eigenvalue \emph{distribution} --- linear statistics $\frac1n\sum_k f(\lambda_k)$ converge to the average of $f\circ \hat R$ over the frequency band --- and \emph{not} each eigenvalue uniformly in $k$; the extreme eigenvalues, at the edges of the spectrum, are exactly where that control is weakest. This asymptotic --- not an exact $[0,T]$ identity, and not a uniform-in-$k$ one --- is precisely the object of the Unit-3 cross-check, and the distributional/uniform distinction is why that cross-check is restricted to the resolved bulk of the spectrum rather than gated on a $\max_k$ over all of it.}
+the $k$-th eigenvalue equals the $k$-th Fourier coefficient of $R$ --- the KL sequence and the
+(discrete, atomic) spectral measure are the same object. On $[0,T]$ the boundary breaks translation
+invariance: the KL eigenfunctions of Brownian motion, for instance, are Sturm--Liouville sine modes
+with eigenvalues $\lambda_n \propto (2n-1)^{-2}$ \pav{Example 1.29}, not Fourier modes, and
+\eqref{eq:torus-coincidence} fails. \extnote{the general asymptotic recovery $\lambda_k \to \hat
+R(\omega_k)$ as $T\to\infty$ --- where $\hat R(\omega)=2\pi S(\omega)$ is the \emph{un-normalized}
+operator symbol, since the eigenproblem $\int R(t,s)e(s)\,ds=\lambda e$ carries no $1/2\pi$ --- is a
+Toeplitz-operator fact (Grenander--Szeg\H{o}), not covered in Pavliotis. Stated precisely, Szeg\H{o}
+controls the eigenvalue \emph{distribution} --- linear statistics $\frac1n\sum_k f(\lambda_k)$
+converge to the average of $f\circ \hat R$ over the frequency band --- and \emph{not} each eigenvalue
+uniformly in $k$; the extreme eigenvalues, at the edges of the spectrum, are exactly where that
+control is weakest. This asymptotic --- not an exact $[0,T]$ identity, and not a uniform-in-$k$ one
+--- is precisely the object of the Unit-3 cross-check, and the distributional/uniform distinction is
+why that cross-check is restricted to the resolved bulk of the spectrum rather than gated on a
+$\max_k$ over all of it.}
 
-\subsection{One factorization, four routes}
+\subsection{One factorization, four routes (three implemented)}
 
-Sampling a Gaussian process is applying a square root of $\mathcal{C}$ to white noise. Four square roots give four sampling algorithms, all reproducing the same \emph{law}:
+Sampling a Gaussian process is applying a square root of $\mathcal{C}$ to white noise. Four square
+roots give four sampling algorithms, all reproducing the same \emph{law}; \textbf{three are
+implemented} (Cholesky, KL truncation, circulant embedding). The random-Fourier series is described
+here as genuine mathematical structure but is \emph{not built} --- and, as noted below, this leaves
+no capability gap.
 \begin{itemize}[leftmargin=1.4cm]
-  \item \textbf{Cholesky (general):} $\Sigma = LL^\top$ on a grid, $X = Lz$, $z\sim N(0,I)$.
-  \item \textbf{KL truncation (general):} \eqref{eq:kl-gaussian} truncated at $K$ terms.
-  \item \textbf{Random Fourier series, Gaussian amplitudes (stationary only):} on a \emph{one-sided} frequency grid $\omega_k>0$,
-  $X(t) = \sum_k \big[a_k\cos(\omega_k t) + b_k\sin(\omega_k t)\big]$ with $a_k,b_k \overset{\text{iid}}{\sim} N\!\big(0,\,2\,S(\omega_k)\,\Delta\omega\big)$. The factor $2$ folds the two-sided spectrum onto $\omega>0$: $\mathrm{Cov}(\tau)=\sum_k 2S(\omega_k)\Delta\omega\cos(\omega_k\tau)\to R(\tau)$. \emph{Gaussian} amplitudes make this a genuine square root of $\mathcal{C}$ applied to white noise, so the finite-$K$ sample is exactly Gaussian; a random-\emph{phase} variant (fixed amplitude $\sqrt{4S(\omega_k)\Delta\omega}$, uniform phase) reproduces the covariance but \emph{not} the Gaussian law at finite $K$ (Gaussian only in the limit, by the CLT), and is therefore not a square root.
-  \item \textbf{Circulant embedding (stationary only):} FFT-diagonalization of the circularly-extended Toeplitz covariance (Wood--Chan / Dietrich--Newsam); the circulant eigenvalues are the DFT of the covariance sequence --- i.e.\ the \emph{discrete} spectral density --- so this is precisely the Bochner square root made computational, on the grid rather than on the line. Exact and $O(m\log m)$ when the embedding is nonnegative definite.
+  \item \textbf{Cholesky (general; implemented):} $\Sigma = LL^\top$ on a grid, $X = Lz$, $z\sim
+  N(0,I)$.
+  \item \textbf{KL truncation (general; implemented):} \eqref{eq:kl-gaussian} truncated at $K$ terms.
+  \item \textbf{Random Fourier series, Gaussian amplitudes (stationary only; \emph{described, not
+  implemented}):} on a \emph{one-sided} frequency grid $\omega_k>0$,
+  $X(t) = \sum_k \big[a_k\cos(\omega_k t) + b_k\sin(\omega_k t)\big]$ with $a_k,b_k
+  \overset{\text{iid}}{\sim} N\!\big(0,\,2\,S(\omega_k)\,\Delta\omega\big)$. The factor $2$ folds the
+  two-sided spectrum onto $\omega>0$: $\mathrm{Cov}(\tau)=\sum_k 2S(\omega_k)\Delta\omega\cos(\omega_k
+  \tau)\to R(\tau)$. \emph{Gaussian} amplitudes make this a genuine square root of $\mathcal{C}$
+  applied to white noise, so the finite-$K$ sample is exactly Gaussian; a random-\emph{phase} variant
+  (fixed amplitude $\sqrt{4S(\omega_k)\Delta\omega}$, uniform phase) reproduces the covariance but
+  \emph{not} the Gaussian law at finite $K$ (Gaussian only in the limit, by the CLT), and is
+  therefore not a square root. (This last is a decision record --- the reason the random-phase
+  variant is rejected as a sampler --- and is retained even though the whole route is unimplemented.)
+  \item \textbf{Circulant embedding (stationary only; implemented):} FFT-diagonalization of the
+  circularly-extended Toeplitz covariance (Wood--Chan / Dietrich--Newsam); the circulant eigenvalues
+  are the DFT of the covariance sequence --- i.e.\ the \emph{discrete} spectral density --- so this
+  is precisely the Bochner square root made computational, on the grid rather than on the line. Exact
+  and $O(m\log m)$ when the embedding is nonnegative definite.
 \end{itemize}
-Cholesky and KL are general; the random-Fourier and circulant routes require stationarity. Each is a different basis in which to take the square root of the same operator: Cholesky is the triangular factor, KL is the eigenbasis, and random-Fourier / circulant embedding are the Bochner square roots on the continuous frequency axis and the discrete FFT grid respectively.
+Cholesky and KL are general; the random-Fourier and circulant routes require stationarity. Each is a
+different basis in which to take the square root of the same operator: Cholesky is the triangular
+factor, KL is the eigenbasis, and random-Fourier / circulant embedding are the Bochner square roots
+on the continuous frequency axis and the discrete FFT grid respectively. \textbf{Because those two
+are the \emph{same} Bochner square root in two realizations, shipping only circulant loses no
+capability} --- the Bochner square root is present; the unbuilt route is the continuous-axis twin of
+a route that is built.
 
 \subsection{Stationarity as gate, ergodicity as loop-closer}
 
-Stationarity is a \emph{precondition} for the Fourier vertex: Brownian motion is not stationary (its covariance $\min(t,s)$ is not a function of $t-s$), so it has no spectral density; it possesses only the Mercer/KL vertex. Ergodicity is the mechanism that licenses every theoretical check in this project: for a stationary process with $C\in L^1(0,\infty)$,
+Stationarity is a \emph{precondition} for the Fourier vertex: Brownian motion is not stationary (its
+covariance $\min(t,s)$ is not a function of $t-s$), so it has no spectral density; it possesses only
+the Mercer/KL vertex. Ergodicity is the mechanism that licenses every theoretical check in this
+project: for a stationary process with $C\in L^1(0,\infty)$,
 \begin{equation}
 \lim_{T\to\infty}\mathbb{E}\left|\frac{1}{T}\int_0^T X_s\,ds - \mu\right|^2 = 0,
 \label{eq:ergodic}
 \end{equation}
 \pav{Prop.~1.16, eqn.~1.12} with finite-$T$ rate (for $C\geq 0$)
 \begin{equation}
-\mathbb{E}\left|\frac{1}{T}\int_0^T (X_s-\mu)\,ds\right|^2 = \frac{2}{T^2}\int_0^T (T-u)\,C(u)\,du \;\leq\; \frac{2}{T}\int_0^\infty C(u)\,du \;=\; \frac{2\Dstar}{T},
+\mathbb{E}\left|\frac{1}{T}\int_0^T (X_s-\mu)\,ds\right|^2 = \frac{2}{T^2}\int_0^T (T-u)\,C(u)\,du
+\;\leq\; \frac{2}{T}\int_0^\infty C(u)\,du \;=\; \frac{2\Dstar}{T},
 \label{eq:ergodic-rate}
 \end{equation}
-\pav{eqn.~1.13, Lemma 1.17} where the first equality is general (Lemma~1.17) but the inequality uses $C\geq0$ (for sign-changing $C$ the honest bound is $\tfrac{2}{T}\int_0^\infty|C|$, and $\Dstar=\int_0^\infty C$ coincides with it only in the sign-definite case; the asymptotic form $\mathrm{Var}\sim 2\Dstar/T$ holds regardless of sign given integrability). Here we introduce the \textbf{Green--Kubo (transport) coefficient}
+\pav{eqn.~1.13, Lemma 1.17} where the first equality is general (Lemma~1.17) but the inequality uses
+$C\geq0$ (for sign-changing $C$ the honest bound is $\tfrac{2}{T}\int_0^\infty|C|$, and
+$\Dstar=\int_0^\infty C$ coincides with it only in the sign-definite case; the asymptotic form
+$\mathrm{Var}\sim 2\Dstar/T$ holds regardless of sign given integrability). Here we introduce the
+\textbf{Green--Kubo (transport) coefficient}
 \begin{equation}
 \Dstar \;:=\; \int_0^\infty C(t)\,dt,
 \qquad
 \mathbb{E}\Big(\int_0^t X_s\,ds\Big)^2 \approx 2\Dstar t \ \ (t \gg 1).
 \label{eq:greenkubo}
 \end{equation}
-\pav{eqns.~1.14--1.15} \textbf{Notation caution (carry $\alpha$).} Pavliotis denotes both the transport coefficient $\int_0^\infty C$ (eqn.~1.14) \emph{and} the noise strength in the OU kernel via $C(0)=D/\alpha$ (Example~1.15) by the single symbol $D$. Example~1.18 makes the collision explicit: there Pavliotis computes the diffusion coefficient of the exponential-correlation process as $\int_0^\infty C = C(0)\,\tau_{\mathrm{cor}} = D/\alpha^2$, so for the OU kernel the two quantities differ, $\Dstar = \int_0^\infty C = D/\alpha^2$, coinciding only at $\alpha=1$. (Eqn.~1.11 merely sets $\alpha=D=1$ for a specific covariance computation, incidentally collapsing the distinction --- it is not the locus of the conflation.) We keep $D$ for the noise strength and $\Dstar$ for the transport coefficient throughout, so every rate constant carries its explicit $\alpha$-dependence. This is what justifies estimating a covariance or a spectral density from a \emph{single} simulated path and comparing it to a closed-form target --- the core verification methodology used throughout Section~2.
+\pav{eqns.~1.14--1.15} \textbf{Notation caution (carry $\alpha$).} Pavliotis denotes both the
+transport coefficient $\int_0^\infty C$ (eqn.~1.14) \emph{and} the noise strength in the OU kernel via
+$C(0)=D/\alpha$ (Example~1.15) by the single symbol $D$. Example~1.18 makes the collision explicit:
+there Pavliotis computes the diffusion coefficient of the exponential-correlation process as
+$\int_0^\infty C = C(0)\,\tau_{\mathrm{cor}} = D/\alpha^2$, so for the OU kernel the two quantities
+differ, $\Dstar = \int_0^\infty C = D/\alpha^2$, coinciding only at $\alpha=1$. (Eqn.~1.11 merely
+sets $\alpha=D=1$ for a specific covariance computation, incidentally collapsing the distinction ---
+it is not the locus of the conflation.) We keep $D$ for the noise strength and $\Dstar$ for the
+transport coefficient throughout, so every rate constant carries its explicit $\alpha$-dependence.
+This is what justifies estimating a covariance or a spectral density from a \emph{single} simulated
+path and comparing it to a closed-form target --- the core verification methodology used throughout.
 
 \subsection{Summary}
 
@@ -193,854 +267,599 @@ Exact coincidence & \multicolumn{2}{c}{on the torus only: $\lambda_k=\hat R(k)$}
 \end{center}
 
 % =====================================================================
-\section{Units}
+\section{Feature Ladder, Spine, and Cut Line}
 % =====================================================================
 
-\textbf{Committed core: Units 0--7} at the working budget of $15$\,h/week ($6\times 2.5$\,h) against a $6$--$8$ week horizon, i.e.\ $90$--$120$\,h. Summed per-unit estimates below total $\approx 52$--$64$ core hours; the remaining budget is deliberate headroom for per-unit spec-writing and review of all generated code, plus a debugging buffer concentrated on the units most likely to overrun for someone newer to stochastic numerics: \textbf{Units~1, 2, 6, and 7}. The risk in Units~1, 6, and 7 is spectral/FFT normalization (one- vs two-sided, angular vs ordinary frequency, unnormalized FFTW, window power); the risk in Unit~2 is the Nystr\"om symmetrization and the eigenvalue noise floor. One further hidden time-sink to anticipate: the Unit-5 marginal-convergence rate is \emph{law-dependent} (see Unit~5), so a fitted slope that is not $n^{-1/2}$ can be correct rather than a bug. Everything through Unit~6 is firm; the SDE bridge (Unit~7) is a labelled forward pointer to Chapter~3 and is the single cut line if the buffer is ever consumed --- nothing in Units 0--6 depends on it. This protects depth over breadth per the stated priority: the extra budget over the original $7.5$\,h/week plan is spent on \emph{more of Chapter~1 done thoroughly} (the scaling-limit construction, fBm, the truncation-cost study, circulant embedding), not on rushing ahead.
+\paragraph{Narrative spine vs.\ build DAG.} The \emph{narrative} spine --- the order in which the
+units are best read --- is $0\to1\to2\to3\to4$, with Units~5, 6, and 7 hanging off it. That order is
+pedagogical and is \emph{not} the dependency graph. The \emph{build DAG} --- what each unit actually
+reuses, and therefore what each feature brief's ``depends on'' field records --- is
+\[
+1\Leftarrow 0,\quad 2\Leftarrow 0,\quad 3\Leftarrow 0,1,2,\quad 4\Leftarrow 0,1,\quad
+5\Leftarrow 0,3,\quad 6\Leftarrow 1,2,4,\quad 7\Leftarrow 3.
+\]
+In particular \textbf{Unit~2 depends on Unit~0 only, not Unit~1} (the KL solver uses linear algebra,
+not the spectral machinery); $1\leftrightarrow2$ is a narrative adjacency, not a build edge. Two of
+these edges are \emph{preferential rather than strict}: Unit~4 samples OU via Unit~1's circulant
+route \emph{preferred}, but Unit~0's Cholesky suffices (OU is well-conditioned); and Unit~7 borrows
+the OU \emph{kernel} that first appears with Unit~1 and checks against Unit~3's exact stationary OU.
+No edge points forward, so each unit is plannable against only the units below it.
 
-Each unit below adds five implementation-oriented fields to the narrative ones: \textbf{Analytic target} (the exact closed-form object the check compares against), \textbf{Pass/fail} (the numerical gate as a checkable predicate), \textbf{Negative control} (where the \emph{wrong} thing is shown to fail), \textbf{README} (the one-line argument its \texttt{experiments/NN\_*/README.md} must make), and \textbf{Missteps} (the most probable errors, each with a one-line guard). A signature table then names the \texttt{src/} surface the unit exercises and the data its \texttt{run.jl} must emit.
+\paragraph{Committed core and the cut line.} \textbf{Units 0--3 are shipped.} Units~4 and~5 are
+committed core. \textbf{Unit~7 is the single cut line} --- a labelled forward pointer to Chapter~3
+that nothing in Units 0--6 depends on, so it is the first to go if the debugging buffer is consumed;
+\textbf{Unit~6 trims second}. (The source this plan replaces contradicted itself here, marking Unit~7
+``the single cut line'' while also calling Unit~6 material to ``trim first alongside~7''; the
+reconciliation is deliberate: 7 first because it is a pure forward pointer, 6 second because it is a
+genuinely new kernel that the core does not require.) This protects depth over breadth: the budget
+beyond the core is spent on \emph{more of Chapter~1 done thoroughly}, not on rushing ahead. See the
+\hyperref[sec:budget]{Budget} for the hour split.
+
+% =====================================================================
+\section{Feature Briefs}
+% =====================================================================
+
+Each brief is orientation for the planner (\texttt{plan-and-dispatch}) that will decompose it into
+commit plans, not a specification. Its fields: \textbf{Idea} (the one concept); \textbf{Proves} (the
+claim and the exact analytic target it is checked against, with any external target flagged);
+\textbf{Falsifier} (the hypothesis whose failure the unit is designed to exhibit --- the intent of
+its negative control); \textbf{Depends on / enables} (its place in the build DAG); \textbf{Deliverable
+shape} (the repository areas it touches and the class of artifact it emits, in prose --- never a call
+signature or a tuned number); \textbf{Effort \& risk} (the estimate and the dominant overrun risk,
+which points into the \hyperref[sec:risk]{risk register}); and \textbf{Status} on two axes ---
+\emph{build} (shipped / planned) and \emph{cut} (core / trim-second / cut-line-trim-first). The exact
+closed-form targets below are philosophy and are pinned here; the tolerances that gate them are
+measurement and live in the code and the per-commit plans.
 
 % ---------------------------------------------------------------
 \subsection*{Unit 0 --- Covariance Core and Gaussian Sampling via Cholesky}
-\addcontentsline{toc}{subsection}{Unit 0 --- Covariance Core and Gaussian Sampling via Cholesky}
-\begin{unitmeta}
-\item[Concept] Gaussian process determined by mean and covariance \pav{App.~B.5}; Cholesky as a square root, $\Sigma = LL^\top$.
-\item[Build] A \texttt{GaussianProcess} type over a kernel $R(t,s)$; grid assembly of $\Sigma$; Cholesky factorization with a small jitter (nugget) $\varepsilon I$ for numerical positive-definiteness; path sampler; the empirical-covariance estimator and its convergence study.
-\item[Check] Empirical covariance of $N$ paths against the analytic $R$, measured in Frobenius norm as a function of $N$.
-\item[Analytic target] $\|\widehat\Sigma_N - \Sigma\|_F \propto N^{-1/2}$, where $\Sigma_{ij}=R(t_i,t_j)$; the intercept is irrelevant, the exponent is the object.
-\item[Pass/fail] Fit $\log\|\widehat\Sigma_N-\Sigma\|_F$ against $\log N$ over $N\in[10^2,10^4]$; gate $|\widehat{\text{slope}}+\tfrac12| < 2.5\,\mathrm{SE}(\widehat{\text{slope}})$ (stochastic-slope gate).
-\item[Negative control] Set $\texttt{jitter}=0$ and factor the \emph{same} Brownian-motion $\Sigma$ used in the main check: its $t=0$ row is identically zero ($R(0,s)=0$), so $\Sigma$ is exactly singular and \texttt{cholesky} throws \texttt{PosDefException}. The throw disappears once $\varepsilon\gtrsim10^{-10}$ --- so the nugget is shown to be load-bearing for the very $\Sigma$ used above, not for a separate pathological matrix. (Reusing the main-check $\Sigma$ is the more honest control: the exponential kernel is well-conditioned at ordinary grid resolutions --- $\operatorname{cond}\approx6\times10^4$ at 200 points --- and would \emph{not} throw at $\texttt{jitter}=0$.)
-\item[Artifact] Sample paths; \emph{error-vs-$N$ log--log plot} with the fitted $-\tfrac12$ slope annotated against the reference line --- the collapse of the fit onto slope $-\tfrac12$ is the feature that demonstrates success.
-\item[README] Concept: a Gaussian process is fixed by mean and covariance, and sampling is applying a square root of $\Sigma$. Why this check: the empirical covariance must converge to the analytic $R$ at the Monte-Carlo rate, and the \emph{slope} certifies both the sampler and the estimator at once. What it proves: the atomic draw underlying every later unit is correct.
-\item[Missteps] (i) \emph{Jitter too small} $\Rightarrow$ indefinite throw; \emph{too large} $\Rightarrow$ biased covariance. Guard: report $\varepsilon$ and confirm $\|\widehat\Sigma_N-\Sigma\|$ is not floored by $\varepsilon$. (ii) \emph{Path-matrix orientation:} \texttt{empirical\_cov} expects paths as columns ($n_{\text{grid}}\times N$); a transpose silently estimates the wrong matrix. Guard: assert \texttt{size(paths,1)==length(t\_grid)}. (iii) \emph{Global RNG:} use \texttt{StableRNG}, not \texttt{randn()} on the default stream.
-\item[Purpose] The atomic operation underlying every later unit: how a Gaussian random function is drawn at all.
-\item[Effort] $\approx 6$--$8$ h (includes repository skeleton).
-\item[Prerequisite] $X = Lz,\ z\sim N(0,I) \Rightarrow \operatorname{Cov}(X) = LL^\top$ --- standard linear algebra, already familiar; the only new content is that a Gaussian \emph{process} is a consistent family of such draws. \pav{App.~B.5}
-\end{unitmeta}
-
-\begin{contracttable}
-\texttt{gaussianprocess.jl} & \texttt{GaussianProcess(kernel; meanfn=t->0.0)} & GP over $R(t,s)$ \\
- & \texttt{assemble\_cov(gp, t\_grid)} & \texttt{Symmetric} $\Sigma_{ij}=R(t_i,t_j)$ \\
- & \texttt{assemble\_mean(gp, t\_grid)} & mean vector $m(t_i)$ \\
- & \texttt{empirical\_cov(paths)} & grid$\times$grid sample covariance; \texttt{paths} is $n_{\text{grid}}\times N$ \\
-\texttt{sampling.jl} & \texttt{sample\_cholesky(Sigma, rng; jitter=1e-10)} & one path $X=Lz$ \\
-\end{contracttable}
-\noindent\textbf{\texttt{experiments/00\_covariance\_core/run.jl}} produces: (i) an $n_{\text{grid}}\times N$ path matrix and a sample-paths figure; (ii) the table $(N,\ \|\widehat\Sigma_N-\Sigma\|_F)$ over the $N$-ladder and the log--log error plot; (iii) the recorded jitter and RNG seed.
+\addcontentsline{toc}{subsection}{Unit 0 --- Covariance Core (Cholesky)}
+\begin{brief}
+\item[Idea] A Gaussian process is fixed by its mean and covariance \pav{App.~B.5}; sampling is
+applying a square root of $\Sigma$ (Cholesky, $\Sigma=LL^\top$, $X=Lz$).
+\item[Proves] The empirical covariance of $N$ sample paths converges to the analytic
+$\Sigma_{ij}=R(t_i,t_j)$ at the Monte-Carlo rate. The headline artifact is the fitted log--log slope
+of $\|\widehat\Sigma_N-\Sigma\|_F$ against $N$, checked against the analytic $-\tfrac12$ and gated
+stochastically (see \hyperref[sec:conv]{conventions}); the intercept is irrelevant, the exponent is
+the object. A passing slope certifies the sampler and the estimator at once.
+\item[Falsifier] The nugget is load-bearing. Factoring the \emph{same} singular Brownian-motion
+$\Sigma$ used in the main check --- its $t=0$ row is identically zero, $R(0,s)=0$, so $\Sigma$ is
+exactly singular --- with the nugget switched off throws; the throw disappears once the nugget is
+restored. Reusing the main-check $\Sigma$ (rather than a separate pathological matrix) is the honest
+control: the OU kernel is well-conditioned and would not throw.
+\item[Depends on / enables] Root of the build DAG (depends on nothing). Enables Units~1--5: every
+later unit draws paths through this.
+\item[Deliverable shape] \texttt{gaussianprocess.jl} (the \texttt{GaussianProcess} type, grid
+assembly of $\Sigma$, the empirical-covariance estimator) and \texttt{sampling.jl} (the jittered
+Cholesky route). The \texttt{experiments/00\_covariance\_core} experiment emits a sample-paths figure
+and the error-vs-$N$ log--log plot with the fitted slope annotated against the reference line, and
+records the jitter and the RNG seed.
+\item[Effort \& risk] $\approx 6$--$8$\,h (includes the repository skeleton). Dominant risk:
+path-matrix orientation --- \texttt{empirical\_cov} expects paths as \emph{columns}
+($n_{\text{grid}}\times N$); a transpose silently estimates the wrong matrix.
+\item[Status] Build: \textbf{shipped}. Cut: \textbf{core}.
+\end{brief}
 
 % ---------------------------------------------------------------
 \subsection*{Unit 1 --- Stationarity Gate: Spectral Density vs.\ Bochner (with Circulant Embedding)}
-\addcontentsline{toc}{subsection}{Unit 1 --- Stationarity Gate: Spectral Density vs.\ Bochner}
-\begin{unitmeta}
-\item[Concept] Weak stationarity \pav{\S1.2}; Bochner's theorem \eqref{eq:bochner}; the Ornstein--Uhlenbeck\slash exponential kernel and its Lorentzian spectrum,
+\addcontentsline{toc}{subsection}{Unit 1 --- Stationarity Gate (Spectral/Bochner)}
+\begin{brief}
+\item[Idea] Weak stationarity \pav{\S1.2} moves all second-order structure onto the frequency axis
+(Bochner, \eqref{eq:bochner}); the Ornstein--Uhlenbeck / exponential kernel has a Lorentzian
+spectrum,
 \begin{equation}
-R(\tau) = \frac{D}{\alpha}e^{-\alpha|\tau|} \quad\Longrightarrow\quad S(\omega) = \frac{D}{\pi}\,\frac{1}{\omega^2+\alpha^2}.
+R(\tau) = \frac{D}{\alpha}e^{-\alpha|\tau|} \quad\Longrightarrow\quad
+S(\omega) = \frac{D}{\pi}\,\frac{1}{\omega^2+\alpha^2}.
 \label{eq:lorentzian}
 \end{equation}
-\pav{Example 1.15}
-\item[Build] Stationary GP with kernel \eqref{eq:lorentzian}; estimate $S$ via an averaged (Welch) periodogram and via FFT of the estimated autocorrelation; retain the \emph{raw} periodogram as a foil; \textbf{implement circulant embedding} (Route~4 in \S1.3) as the exact FFT-based stationary sampler --- the same Bochner/FFT machinery running in the sampling direction.
-\item[Check] Estimated $S(\omega)$ against the Lorentzian; the total-variance normalization; and circulant samples against the analytic covariance.
-\item[Analytic target] $S(\omega)=\dfrac{D}{\pi(\omega^2+\alpha^2)}$ with $\displaystyle\int_{\mathbb{R}}S\,d\omega = D/\alpha = R(0)$ under the $1/2\pi$-on-$S$ convention of \eqref{eq:spectraldensity}.
-\item[Pass/fail] (a) $\big|\int\widehat S\,d\omega\,/\,R(0) - 1\big| < 0.05$; (b) relative $L^2$ error of $\widehat S$ vs.\ the Lorentzian over the resolved band $|\omega|\le\omega_{\max}$ below a few times the Welch estimator's own SE (documented in the README); (c) circulant covariance error $\|\widehat\Sigma-\Sigma\|/\|\Sigma\| < 10^{-10}$ (floating-point scale).
-\item[Negative control] Two, both plotted. (i) Overlay \texttt{raw\_periodogram} on \texttt{welch\_psd}: the raw estimate stays jagged and its variance does \emph{not} shrink with record length at fixed $\omega$, while Welch converges --- inconsistency made visible. (ii) Drop the $1/2\pi$ (engineering convention): $\int\widehat S\,d\omega\,/\,R(0)$ lands on exactly $2\pi$ instead of $1$ --- the spurious factor made to appear on purpose.
-\item[Artifact] Estimated vs.\ analytic $S(\omega)$, log--log, showing the Lorentzian tail with the resolved band shaded; a raw-vs-Welch overlay; a circulant-embedding covariance-error panel.
-\item[README] Concept: stationarity moves all second-order structure onto the frequency axis (Bochner). Why this check: the estimate must both match the Lorentzian \emph{and} integrate to the variance under a pinned convention, and circulant embedding is the same machinery run as a sampler. What it proves: the Fourier vertex is correctly implemented in both directions, and the two controls exhibit exactly what a wrong estimator and a wrong normalization look like. (This README carries the $2\pi$ lesson for the whole repository.)
-\item[Missteps] (i) \emph{One- vs two-sided spectrum} --- forgetting the interior-bin factor $2$ halves $\int\widehat S$. (ii) \emph{Angular vs ordinary frequency} --- mixing $\omega$ and $f=\omega/2\pi$ injects a $2\pi$. (iii) \emph{FFTW is unnormalized} --- restore $\Delta t$ and $1/N$ explicitly. (iv) \emph{Welch window power} --- divide by $\sum_n w_n^2$, not $N$. (v) \emph{Circulant scaling} --- validate the exact FFT normalization against the analytic covariance here, once. Guard for all: pin the normalization so the discrete $\int\widehat S\,d\omega\to R(0)$ and unit-test it.
-\item[Purpose] The Fourier vertex: stationarity is what allows second-order structure to be described entirely on the frequency axis --- both as an object to estimate (periodogram) and as an exact synthesis route (circulant embedding).
-\item[Effort] $\approx 8$--$9$ h (includes circulant embedding). \emph{Highest overrun risk in the project} --- the circulant scaling validation and the two controls are where the hours go.
-\item[Prerequisite] \extnote{the raw periodogram is a statistically \emph{inconsistent} estimator of $S$ and must be smoothed or averaged; this is a standard time-series fact (e.g.\ Percival \& Walden, or Brockwell \& Davis), not covered in Pavliotis.} The point genuinely new relative to deterministic FFT experience: the estimator itself is random and biased, so familiarity with the FFT does not by itself deliver a consistent density estimate.
-\end{unitmeta}
-
-\begin{contracttable}
-\texttt{kernels.jl} & \texttt{exponential\_kernel(t, s; D=1.0, alpha=1.0)} & OU/exponential covariance \\
-\texttt{spectral.jl} & \texttt{welch\_psd(x, dt; nseg, noverlap, window=:hann, onesided=true)} & consistent $(\omega,\widehat S)$ \\
- & \texttt{raw\_periodogram(x, dt; onesided=true)} & inconsistent $(\omega,I)$ (control) \\
- & \texttt{bochner\_forward(r, dt; onesided=true)} & $(\omega,S)$ from a covariance sequence \\
- & \texttt{spectral\_variance(omega, Shat)} & trapezoid $\int\widehat S\,d\omega$ \\
-\texttt{sampling.jl} & \texttt{sample\_circulant\_embedding(r, rng)} & exact stationary path \\
-\end{contracttable}
-\noindent\textbf{\texttt{experiments/01\_spectral\_bochner/run.jl}} produces: (i) $(\omega,\widehat S,S_{\text{analytic}})$ and the log--log density plot; (ii) the scalar \texttt{spectral\_variance/R(0)} (target $\approx1$); (iii) $\|\widehat\Sigma-\Sigma\|/\|\Sigma\|$ for circulant samples; (iv) the raw-vs-Welch and dropped-$1/2\pi$ control panels.
+\pav{Example 1.15} Circulant embedding runs the same Bochner/FFT machinery as an exact stationary
+sampler.
+\item[Proves] Two independent estimators of $S$ (an averaged Welch periodogram and the FFT of the
+estimated autocorrelation) match the Lorentzian \eqref{eq:lorentzian} over the resolved band, and the
+total-variance normalization holds: $\int_{\mathbb{R}}S\,d\omega = D/\alpha = R(0)$ under the
+$1/2\pi$-on-$S$ convention of \eqref{eq:spectraldensity}. Circulant samples reproduce the analytic
+covariance to floating-point scale. The headline artifact is the estimated-vs-analytic density on
+log--log axes plus the pinned normalization scalar. \extnote{that the raw periodogram is a
+statistically \emph{inconsistent} estimator of $S$ and must be smoothed or averaged --- a standard
+time-series fact (Percival \& Walden; Brockwell \& Davis).}
+\item[Falsifier] Two controls, both plotted. (i)~The raw periodogram overlaid on Welch: it stays
+jagged and its variance does not shrink with record length at fixed $\omega$, while Welch converges
+--- inconsistency made visible. (ii)~Dropping the $1/2\pi$ (engineering convention): the normalization
+ratio lands on exactly $2\pi$ instead of $1$ --- the spurious factor made to appear on purpose. (This
+README carries the $2\pi$ lesson for the whole repository.)
+\item[Depends on / enables] $\Leftarrow$ Unit~0. Enables Units~3, 4, 6.
+\item[Deliverable shape] \texttt{kernels.jl} (the exponential/OU kernel), \texttt{spectral.jl} (the
+Welch and raw periodogram estimators, the Bochner forward/inverse transforms, and the total-power and
+total-variance integrators), and \texttt{sampling.jl} (circulant embedding). The
+\texttt{experiments/01\_spectral\_bochner} experiment emits the density plot with the resolved band
+shaded, a raw-vs-Welch overlay, a circulant covariance-error panel, and the dropped-$1/2\pi$ control.
+\item[Effort \& risk] $\approx 8$--$9$\,h --- the highest overrun risk in the project. Dominant risk:
+the \hyperref[sec:risk]{FFT/normalization family} (one- vs two-sided spectra, angular vs ordinary
+frequency, unnormalized FFTW, window power, circulant scaling) --- pin the normalization once so the
+discrete $\int\widehat S\,d\omega\to R(0)$ and unit-test it.
+\item[Status] Build: \textbf{shipped}. Cut: \textbf{core}.
+\end{brief}
 
 % ---------------------------------------------------------------
-\subsection*{Unit 2 --- Karhunen--Lo\`eve via Quadrature Eigenproblem (Torus Contrast + Truncation Cost)}
-\addcontentsline{toc}{subsection}{Unit 2 --- Karhunen--Lo\`eve via Quadrature Eigenproblem}
-\begin{unitmeta}
-\item[Concept] KL expansion \pav{\S1.5, eqns.~1.32--1.36, Thm.~1.28}; Mercer's theorem \pav{inline, \S1.5}; closed-form Brownian-motion KL basis on $[0,1]$,
+\subsection*{Unit 2 --- Karhunen--Lo\`eve via a Quadrature Eigenproblem (Torus Contrast + Truncation Cost)}
+\addcontentsline{toc}{subsection}{Unit 2 --- Karhunen--Lo\`eve (Quadrature Eigenproblem)}
+\begin{brief}
+\item[Idea] The KL expansion \pav{\S1.5, Thm.~1.28} and Mercer's theorem give the operator's own
+adapted-basis diagonalization; Brownian motion has a closed-form KL basis on $[0,1]$,
 \begin{equation}
-\lambda_n = \left(\frac{2}{(2n-1)\pi}\right)^{2}, \qquad e_n(t) = \sqrt{2}\,\sin\!\left(\tfrac{1}{2}(2n-1)\pi t\right).
+\lambda_n = \left(\frac{2}{(2n-1)\pi}\right)^{2}, \qquad
+e_n(t) = \sqrt{2}\,\sin\!\left(\tfrac{1}{2}(2n-1)\pi t\right),
 \label{eq:bm-kl}
 \end{equation}
-\pav{Example 1.29, eqn.~1.37} (Pavliotis fixes $T=1$ in \S1.5; on a general $[0,T]$ these scale as $\lambda_n \propto T^2$, and the trace target below is $T$-dependent.)
-\item[Build] Nystr\"om discretization of the eigenproblem $\int_0^T R(t,s)e(s)\,ds = \lambda\, e(t)$ by quadrature, \textbf{symmetrized} before the eigensolve (see Missteps), reducing it to a symmetric matrix eigenproblem --- directly analogous to boundary-integral-equation discretization on a positive semi-definite kernel; sample by KL truncation.
-\item[Check] Numerical $(\lambda_k,e_k)$ against the closed form; the trace identity as an assembly check; the torus coincidence and its failure on $[0,T]$; the truncation cost/accuracy trade-off.
-\item[Analytic target] Eigenpairs \eqref{eq:bm-kl} ($\lambda_n\propto T^2$ on $[0,T]$); trace $\sum_n\lambda_n = \int_0^T R(t,t)\,dt$ (general form; $=T^2/2$ for Brownian motion, \emph{not} $T\,R(0)=0$), with the stationary specialization $\sum_n\lambda_n=T\,R(0)$ \pav{Exercise 23} checked on a stationary kernel; torus coincidence $\lambda_k=\hat R(k)$ exactly.
-\item[Pass/fail] Eigenvalue error and eigenfunction $L^2$-error vs.\ $k$, gated \emph{only over the resolved range} above the discretization floor; the deterministic $\lambda_k\sim k^{-2}$ decay slope fitted within that window and gated against $-2$ with a fixed absolute margin ($\pm0.15$; \emph{not} an SE-based gate --- the residuals are misspecification, not sampling noise). Trace: $|\sum\lambda_{\text{num}}-\int_0^T R(t,t)\,dt|/|\!\int_0^T R(t,t)\,dt| < 10^{-3}$. Torus: $\max_k|\lambda_k-\hat R(k)| < 10^{-8}$ on the circle.
-\item[Negative control] Two, both latent in the design and now labelled. (i) Run the torus coincidence $\lambda_k=\hat R(k)$ on $[0,T]$: it \emph{fails}, because the eigenfunctions are Sturm--Liouville sines, not characters. (ii) Extend the eigenvalue plot \emph{below} the discretization floor: the $k^{-2}$ slope flattens --- the resolution limit is made visible rather than hidden.
-\item[Artifact] First eigenfunctions; eigenvalue decay $\lambda_k \sim k^{-2}$ with the resolved window shaded and the floor annotated; side-by-side torus-Fourier vs.\ interval-Sturm--Liouville mode shapes; truncation-error-vs-$K$ and KL-vs-Cholesky cost curves.
-\item[README] Concept: KL is the adapted-basis diagonalization, and its eigenvalues double as the variances of the expansion coefficients (the classical antecedent of POD/PCA). Why this check: Brownian motion's closed-form basis certifies the solver, the trace pins assembly, and the torus contrast pins the Fourier$\leftrightarrow$KL relationship --- exact on the circle, broken on the interval. What it proves: the second diagonalization is correctly implemented and its exact relationship to the first is understood, with the resolved range stated so the slope claim is honest.
-\item[Missteps] (i) \emph{Non-symmetric discretization (the key one):} $\int R(t,s)e(s)\,ds=\lambda e(t)$ discretizes to $(KW)e=\lambda e$ with $W=\operatorname{diag}(\text{weights})$, which is \emph{not} symmetric even though $R$ is --- its eigenvectors are not orthonormal and may come out complex. Guard: solve $W^{1/2}KW^{1/2}g=\lambda g$, then $e=W^{-1/2}g$. (ii) \emph{Eigenvector normalization:} normalize in the discrete $L^2$ inner product ($\sum_i w_i e_k(t_i)^2=1$), not the Euclidean one. (iii) \emph{Sign convention:} eigenvector signs are arbitrary; align sign before computing the eigenfunction $L^2$ error. (iv) \emph{Noise floor:} fit the decay slope only above it.
-\item[Numerical caution] The small eigenvalues are computed to poor \emph{relative} accuracy: Nystr\"om resolves $\lambda_k$ only until it sinks into the discretization noise floor, after which the error-vs-$k$ curve plateaus and the $\lambda_k\sim k^{-2}$ decay flattens. This floor is a property of the discretization, not a modeling error; the slope checks are meaningful only over the $k$-range above it, and the experiment README states the resolved range explicitly.
-\item[Purpose] The adapted-basis diagonalization: the optimal linear basis for representing a given random function (the classical antecedent of POD/PCA), together with the practical cost/accuracy trade-off of truncating it.
-\item[Effort] $\approx 10$--$11$ h --- the deepest unit (includes the truncation-cost study); flagged for the debugging buffer (symmetrization + noise floor).
-\item[Prerequisite] The spectral theorem for compact self-adjoint operators (already familiar from functional analysis coursework); the new content is that the kernel being diagonalized is specifically a \emph{covariance}, so its eigenvalues carry the further meaning of variances. \pav{\S1.5, Thm.~1.28 and the inline Mercer statement}
-\end{unitmeta}
-
-\noindent The trace identity used as the assembly/quadrature sanity check is, in its general form,
-\begin{equation}
-\sum_{n=1}^{\infty}\lambda_n \;=\; \operatorname{Tr}\mathcal{C} \;=\; \int_0^T R(t,t)\,dt
-\label{eq:trace}
-\end{equation}
-which equals $T^2/2$ for Brownian motion (\emph{not} $T\,R(0)=0$); the stationary specialization $\sum_n\lambda_n=T\,R(0)$ \pav{Exercise 23} holds only when $R(t,t)\equiv R(0)$ and is checked separately on a stationary kernel.
-
-\noindent\emph{Torus contrast, in full.} On the circle with a stationary kernel, verify $\lambda_k = \hat R(k)$ \emph{exactly} \eqref{eq:torus-coincidence} with Fourier eigenfunctions, and confirm this identity fails on $[0,T]$ where the eigenfunctions are the Sturm--Liouville sines of \eqref{eq:bm-kl}. (Pavliotis's Exercise~27 verifies $\lambda_k=\hat R(k)$ only for the \emph{degenerate}, rank-2 kernel $\cos 2\pi(t-s)$; the project's \texttt{periodic\_kernel} has a full positive spectrum $\hat R(k)=\tfrac{2\alpha\,(1-(-1)^k e^{-\alpha/2})}{\alpha^2+(2\pi k)^2}>0$, derived and verified in-house, so the torus coincidence here rests on that derivation rather than on Exercise~27.) \emph{Truncation cost/accuracy (Exercise~28):} quantify the KL truncation error as a function of the number of retained modes $K$ (how many terms are needed for accurate statistics of BM, the bridge, and OU) and compare the cost of KL sampling against the Cholesky route of Unit~0.
-
-\begin{contracttable}
-\texttt{kl.jl} & \texttt{quad\_nodes\_weights(T; n, rule=:trapezoid)} & \texttt{(nodes, weights)} \\
- & \texttt{nystrom\_eigen(R, nodes, weights; nev=n)} & \texttt{(lambdas, eigfuncs)}, symmetrized, sorted, $L^2$-normalized \\
- & \texttt{trace\_diag(R, nodes, weights)} & $\sum_i w_i R(t_i,t_i)\approx\int_0^T R(t,t)\,dt$ \\
- & \texttt{kl\_tail\_energy(lambdas, K)} & $\sum_{k>K}\lambda_k/\sum_k\lambda_k$ \\
-\texttt{sampling.jl} & \texttt{sample\_kl(lambdas, eigenfuncs, rng)} & one KL-truncated path \\
-\texttt{kernels.jl} & \texttt{periodic\_kernel(t, s; D=1.0, alpha=1.0)} & torus kernel (positive spectrum) \\
-\end{contracttable}
-{\sloppy
-\noindent\textbf{\texttt{experiments/02\_kl\_quadrature/run.jl}} produces: (i) $(k,\lambda_{\text{num}},\lambda_{\text{analytic}})$ and $(k,\text{eigenfunction }L^2\text{-error})$ over the resolved range; (ii) $\sum\lambda-\texttt{trace\_diag}$ (general) and the stationary $T\,R(0)$ check; (iii) the torus $(k,\lambda_k,\hat R(k))$ exact-match table and the same identity failing on $[0,T]$; (iv) $(K,\ \texttt{kl\_tail\_energy})$ and the KL-vs-Cholesky cost table.\par}
+\pav{Example 1.29, eqn.~1.37} solved numerically by a Nystr\"om quadrature eigenproblem,
+\emph{symmetrized} before the eigensolve.
+\item[Proves] The numerical eigenpairs match the closed form \eqref{eq:bm-kl} and the eigenvalue decay
+follows $\lambda_k\sim k^{-2}$; the trace identity $\sum_n\lambda_n = \int_0^T R(t,t)\,dt$ pins
+assembly (this equals $T^2/2$ for Brownian motion --- \emph{not} $T\,R(0)=0$; the wrong target is
+itself worth recording), with the stationary specialization $\sum_n\lambda_n=T\,R(0)$
+\pav{Exercise 23} checked on a stationary kernel; and the torus coincidence $\lambda_k=\hat R(k)$
+holds \emph{exactly} on the circle. The decay is a \emph{deterministic} slope (its residuals are
+discretization misspecification, not sampling noise), gated only over the resolved range above the
+discretization floor --- see \hyperref[sec:conv]{conventions}.
+\item[Falsifier] Two, both latent in the design. (i)~Run the torus coincidence on $[0,T]$: it
+\emph{fails}, because the interval eigenfunctions are Sturm--Liouville sines, not characters. (ii)~
+Extend the eigenvalue plot \emph{below} the discretization floor: the $k^{-2}$ slope flattens --- the
+resolution limit made visible rather than hidden.
+\item[Depends on / enables] $\Leftarrow$ Unit~0 (not Unit~1). Enables Units~3, 6.
+\item[Deliverable shape] \texttt{kl.jl} (quadrature nodes and weights, the symmetrized Nystr\"om
+eigensolver, the diagonal-trace quadrature, the KL tail-energy), \texttt{sampling.jl} (the KL
+truncation route), and \texttt{kernels.jl} (a torus kernel with a \emph{full} positive spectrum ---
+derived in-house, since Pavliotis's Exercise~27 verifies $\lambda_k=\hat R(k)$ only for the
+degenerate rank-2 kernel $\cos2\pi(t-s)$, insufficient for the torus contrast wanted here). The
+\texttt{experiments/02\_kl\_quadrature} experiment emits the eigenfunctions, the eigenvalue decay with
+the resolved window shaded and the floor annotated, side-by-side torus-Fourier vs.\ interval
+Sturm--Liouville mode shapes, and the truncation-error-vs-$K$ and KL-vs-Cholesky cost curves.
+\item[Effort \& risk] $\approx 10$--$11$\,h --- the deepest unit. Dominant risk: the Nystr\"om
+symmetrization (the naive discretization is non-symmetric even though $R$ is) and the eigenvalue noise
+floor --- both in the \hyperref[sec:risk]{risk register}.
+\item[Status] Build: \textbf{shipped}. Cut: \textbf{core}.
+\end{brief}
 
 % ---------------------------------------------------------------
-\subsection*{Unit 3 --- Reconciliation: The Process Zoo Where the Machinery Agrees with Itself}
+\subsection*{Unit 3 --- Reconciliation: The Process Zoo}
 \addcontentsline{toc}{subsection}{Unit 3 --- Reconciliation (Process Zoo)}
-\begin{unitmeta}
-\item[Concept] Brownian motion, $R(t,s)=\min(t,s)$ \pav{eqn.~1.21}, and its invariances (rescaling, shifting, time reversal, inversion) \pav{Prop.~1.23}; Brownian bridge, $R(t,s) = \min(t,s) - ts$, with $B_t = (1-t)\,W\!\left(\frac{t}{1-t}\right)$ \pav{eqn.~1.26 / Exercise 6}; stationary Ornstein--Uhlenbeck, $R(\tau) = \frac{D}{\alpha}e^{-\alpha|\tau|}$ \pav{Example 1.15}. The unit's one distinct idea is \emph{reconciliation}: the sampling routes and the two diagonalizations are forced to agree on concrete processes, and \emph{distributional} (not merely moment) identities are verified from finite samples. The sampling itself is \emph{reuse} of Units~0/1/2, not new work.
-\item[Build] Instantiate each process by reusing the existing routes (Cholesky from Unit~0, KL from Unit~2, and circulant embedding from Unit~1 for the stationary OU); assemble a small kernel catalogue with the relevant closed-form facts attached to each.
-\item[Check] (a) \emph{Route equivalence:} Cholesky, KL, and circulant samples of the OU process yield the same empirical covariance, judged against a \emph{split-half null} --- the same statistic computed between two halves of a \emph{single} route's samples, which is by construction a draw from the ``same law, different samples'' distribution and so calibrates the gate without a variance formula. (b) \emph{Distributional identities}, in two steps: Gaussianity of the transformed process is established \emph{by construction} (a deterministic linear time-change of a Gaussian process is Gaussian, laws being closed under linear maps), after which App.~B.5 applies as a \emph{theorem} and matching the \emph{full} covariance over the grid is equality in law --- e.g.\ $c^{-1/2}W(ct) \overset{d}{=} W(t)$; then, as a check that does \emph{not} lean on Gaussianity, Cram\'er--Wold projections: a handful of fixed linear functionals $a^\top X$ of the sample paths, each one-dimensional projection KS-tested against its $N(0,a^\top\Sigma a)$ target. Bridge endpoints pinned exactly at $t=0,1$ via the covariance/Cholesky route (the time-change formula cannot be evaluated at $t=1$). Additionally the KL coefficients: project onto Unit~2's eigenfunctions, verify the empirical correlation matrix of the $\xi_k$ is $\approx I$ and KS each $\xi_k$ against $N(0,\lambda_k)$ --- uncorrelated \emph{and} jointly Gaussian $\Rightarrow$ independent, which is the KL expansion's actual content. (c) \emph{The cross-check} (below).
-\item[Analytic target] Kernels $\min(t,s)$, $\min(t,s)-ts$, $\tfrac{D}{\alpha}e^{-\alpha|\tau|}$. \textbf{The cross-check target is asymptotic, not exact.} On $[0,T]$ the OU KL eigenvalues do \emph{not} equal the sampled spectral density; the coincidence $\lambda_k=\hat R(k)$ is torus-only. What holds on $[0,T]$ is the large-$T$ Toeplitz/Grenander--Szeg\H{o} limit $\lambda_k \to \hat R(\omega_k)$, $\omega_k = k\pi/T$, where $\hat R(\omega)=\int_{-\infty}^{\infty}e^{-i\omega\tau}R(\tau)\,d\tau=\tfrac{2D}{\alpha^2+\omega^2}=2\pi\,S(\omega)$ is the \emph{un-normalized} operator symbol: \texttt{nystrom\_eigen} diagonalizes the bare integral operator $\int R(t,s)e(s)\,ds$ (no $1/2\pi$), so its eigenvalues converge to $\hat R$, \emph{not} to the Unit-1 density $S(\omega)=\tfrac{D}{\pi(\alpha^2+\omega^2)}$ (which is $2\pi$ smaller). This is the interval counterpart of the exact torus coincidence $\lambda_k=\hat R(k)$ above. \textbf{And the convergence is distributional, not uniform in $k$:} Szeg\H{o} controls linear statistics of the spectrum, not each individual eigenvalue, and is weakest exactly at the spectrum's edges --- so there is \emph{no} defensible per-eigenvalue target, the comparison is restricted to the resolved bulk (reusing Unit~2's resolved-range criterion), and no theoretical decay exponent for the gap is claimed. \extnote{this is the Toeplitz asymptotic flagged in \S1.2, not a Pavliotis result; it is the reason the cross-check is stated as a convergence rather than an equality, and the reason it is gated on the bulk rather than on a $\max_k$ over the whole spectrum.}
-\item[Pass/fail] \emph{Route equivalence --- gate against a split-half null, not an SE.} The statistic $\|\widehat\Sigma_A-\widehat\Sigma_B\|_F$ is a norm over $n_{\text{grid}}^2$ entries: it does \emph{not} hover near zero but concentrates about a strictly positive value, $\mathbb{E}\|\widehat\Sigma_A-\widehat\Sigma_B\|_F^2 = 2\sigma_1^2$ with $\sigma_1^2 = \mathbb{E}\|\widehat\Sigma-\Sigma\|_F^2 = \big((\operatorname{tr}\Sigma)^2+\|\Sigma\|_F^2\big)/N$, so a zero-centred ``within $3\,$SE'' predicate is gating against the wrong null and passes routes that disagree by a factor of two. Instead: split one route's $N$ samples into halves, compute $\|\widehat\Sigma_{A,1}-\widehat\Sigma_{A,2}\|_F$ over several splits to obtain the null band empirically, and require each cross-route statistic to land inside it after the $\sqrt2$ rescale for the halved sample size. Self-calibrating and correctly powered; the closed form above is retained only as a sanity check that the measured band sits where theory says. \emph{Distributional identity:} full empirical covariance of $c^{-1/2}W(ct)$ matches $\min(t,s)$ within the same split-half null, \emph{and} every Cram\'er--Wold projection's KS statistic lies below its finite-sample critical value at the recorded seed. \emph{Cross-check:} with $\lambda_k$ from \texttt{nystrom\_eigen} and $\hat R(\omega_k)$ \emph{analytic} (not Welch-estimated), the bulk gap $g(T)=\max_{k\in\text{bulk}}|\lambda_k - \hat R(\omega_k)|$ is deterministic given the quadrature; fit $\log g$ vs.\ $\log T$ across a ladder of increasing $T$ and gate the fitted slope below a fixed negative threshold, reporting the exponent without claiming it against a theoretical value (none is defensible --- see Analytic target). Per the rate-check convention of \emph{Reproducibility and Testing Convention} below this is a \emph{deterministic} slope, so the margin is a fixed absolute one and \emph{not} a multiple of the regression SE; monotonicity is deliberately not required, since neither Szeg\H{o} nor the quadrature guarantees it at finite $T$.
-\item[Negative control] Repeat the self-similarity identity with the \emph{wrong} exponent, $c^{-1/3}W(ct)$: the empirical covariance no longer matches $\min(t,s)$ (it is off by $c^{1/3}$). This makes the correct $c^{-1/2}$ meaningful and is fully self-contained.
-\item[Artifact] A three-panel portrait per process (sample paths / covariance heat-map / eigenvalue decay); a route-equivalence panel (three empirical covariances of OU, with the three pairwise distances plotted \emph{against the split-half null band}, so the reader sees the gate's calibration and not merely a number); a Cram\'er--Wold panel (per-projection empirical CDF against its Gaussian target, with the KS statistic annotated); the cross-check plot, $\log g(T)$ vs.\ $\log T$ on log--log axes with the fitted slope shown --- and the Welch estimate of $S$ overlaid on the analytic $S$ at the largest $T$ as a \emph{visual} reconciliation of the two diagonalizations (this overlay is the pedagogical point of the unit; it is not what the gate is computed from).
-\item[README] Concept: each process is just a choice of kernel. Why this check: distributional identities certify the \emph{law}, not merely a moment --- and the README must spell out the licensing chain rather than assert the conclusion, because the chain is the content: the time-changed process is Gaussian \emph{by construction} (a deterministic linear map of a Gaussian process), which is a proof and not something the samples are asked to establish; App.~B.5 then upgrades a match of the \emph{full} covariance into equality in law; and the Cram\'er--Wold projections supply the evidence that would catch a non-Gaussian impostor carrying the right covariance, which is precisely the evidence App.~B.5 alone cannot give. The cross-check forces the two diagonalizations to reconcile as $T\to\infty$. What it proves: the field's vocabulary is correctly instantiated, the sampling routes agree, and the Fourier and KL vertices are made to speak to each other directly --- the payoff of \S1.5. Its distinct idea is reconciliation; the sampling is inherited.
-\item[Missteps] (i) \emph{Expecting exact, or uniform, $\lambda_k=\hat R(\omega_k)$ on $[0,T]$} --- it is asymptotic \emph{and} distributional; gate on the bulk gap shrinking, never on a single-$T$ match, and never on a $\max_k$ over the whole spectrum, where the edge eigenvalues Szeg\H{o} does not control will dominate the statistic and can stall its decay entirely. (ii) \emph{Frequency grid and normalization for the cross-check} --- use $\omega_k=k\pi/T$, and compare $\lambda_k$ against the \emph{un-normalized} symbol $\hat R(\omega)=2\pi\,S(\omega)=\tfrac{2D}{\alpha^2+\omega^2}$, \emph{not} the Unit-1 density $S$: \texttt{nystrom\_eigen} carries no $1/2\pi$, so comparing against $S$ is off by a constant factor of $2\pi$ and the gap plateaus instead of shrinking. (iii) \emph{Distributional vs moment identity} --- equality of mean and covariance implies equality in law only for jointly Gaussian objects \pav{App.~B.5}, so the Gaussianity must be \emph{argued} (here: by construction, from linearity of the time change) and never inferred from the samples that are then tested; given that argument, a match of the \emph{full} covariance \emph{is} a distributional identity and should be claimed as one --- the error to avoid is the opposite one, claiming the law from a \emph{single} matched moment with the Gaussianity left implicit. (iv) \emph{Gating $\|\widehat\Sigma_A-\widehat\Sigma_B\|_F$ against zero} --- it is a norm over many entries, so it concentrates around $\sqrt2\,\sigma_1>0$ rather than fluctuating about zero; a tolerance phrased as a multiple of a single-route SE is measuring against a null the statistic never visits and will pass badly disagreeing routes. Guard: calibrate with the split-half null, and confirm the observed band matches $\sqrt2\,\sigma_1$ before trusting it.
-\item[Purpose] The field's basic vocabulary; every subsequent construction is one of these three processes (or a simple transform of one) --- and the one place the whole apparatus is shown to be internally consistent.
-\item[Effort] $\approx 8$ h (the sampling leverages Units 0, 1, and 2 and is almost entirely reuse; the added hour is the Cram\'er--Wold projections, the split-half calibration, and \texttt{gof.jl} with its test).
-\item[Prerequisite] For jointly Gaussian objects, equality of mean and covariance implies equality in law \pav{App.~B.5} --- the recurring fact that uncorrelated $+$ jointly Gaussian $\Rightarrow$ independent is used here to validate KL coefficients. New content: verifying a \emph{distributional} identity (not just a moment) from finite Monte Carlo samples, which is done in two moves --- App.~B.5 applied to a Gaussianity that is proved rather than tested, and then the Cram\'er--Wold device, that equality in law of random vectors is equivalent to equality in law of every one-dimensional projection $a^\top X$, which reduces a multivariate distributional claim to a family of scalar KS tests. \extnote{the Cram\'er--Wold theorem, and the Kolmogorov--Smirnov statistic and its finite-sample critical values; standard, external to Pavliotis.}
-\end{unitmeta}
-
-\begin{contracttable}
-\texttt{kernels.jl} & \texttt{brownian\_motion\_kernel}, \texttt{brownian\_bridge\_kernel}, \texttt{exponential\_kernel} & the three catalogue kernels \\
-\texttt{sampling.jl} & \texttt{sample\_cholesky}, \texttt{sample\_kl}, \texttt{sample\_circulant\_embedding} & reused; route equivalence \\
-\texttt{gaussianprocess.jl} & \texttt{empirical\_cov(paths)} & per-route covariance; also per half, for the split-half null \\
-\texttt{gof.jl} \textbf{(new)} & \texttt{ks\_statistic(samples, cdf)} & KS distance to a target CDF; Cram\'er--Wold projections \\
-\texttt{kl.jl} & \texttt{nystrom\_eigen(R, nodes, weights)} & $\lambda_k$ for the cross-check \\
-\texttt{spectral.jl} & \texttt{welch\_psd(x, dt; ...)} & the $S$ overlay in the artifact only --- \emph{not} the gate \\
-\end{contracttable}
-\noindent\textbf{One new \texttt{src/} module, \texttt{gof.jl}} --- a small, tested goodness-of-fit utility (\texttt{ks\_statistic}), shared with Unit~5. It is deliberately \emph{not} an operation on $\mathcal{C}$; it lives in \texttt{src/} rather than in either experiment because two units need it and because a hand-computed deterministic test is exactly the kind of guard the \texttt{src/}\slash\texttt{test/} tier exists to provide. Everything else in this unit is reuse. \textbf{\texttt{experiments/03\_process\_zoo/run.jl}} produces: (i) three per-process portraits; (ii) the OU route-equivalence panel, with the three pairwise distances against the split-half null band; (iii) the BM invariance identities, the Cram\'er--Wold per-projection KS table, the KL-coefficient correlation/normality check, and the pinned bridge endpoints; (iv) the deterministic cross-check ladder $g(T)=\max_{k\in\text{bulk}}|\lambda_k-\hat R(\omega_k)|$ vs.\ $T$ on log--log axes with its fitted slope, plus the one-sided Welch-vs-analytic overlay (against $2S(\omega)$); (v) the wrong-exponent negative-control panel.
+\begin{brief}
+\item[Idea] A small catalogue of processes --- Brownian motion $R(t,s)=\min(t,s)$ \pav{eqn.~1.21},
+Brownian bridge $R(t,s)=\min(t,s)-ts$ \pav{eqn.~1.26 / Exercise 6}, stationary OU
+$R(\tau)=\tfrac{D}{\alpha}e^{-\alpha|\tau|}$ \pav{Example 1.15} --- each just a choice of kernel. The
+unit's one distinct idea is \emph{reconciliation}: the sampling routes and the two diagonalizations
+are forced to agree on concrete processes, and \emph{distributional} (not merely moment) identities
+are verified from finite samples. The sampling itself is reuse of Units~0/1/2.
+\item[Proves] Three things. \emph{(a) Route equivalence:} Cholesky, KL, and circulant samples of OU
+yield the same empirical covariance, judged against a \emph{split-half null} --- the same statistic
+computed between two halves of a single route's samples, which is by construction a draw from the
+``same law, different samples'' distribution and so calibrates the gate without a variance formula.
+(This is essential because $\|\widehat\Sigma_A-\widehat\Sigma_B\|_F$ is a norm over many entries: it
+concentrates about a strictly positive value, not zero, so a ``within $k$ SE of zero'' predicate gates
+against the wrong null and passes routes that disagree by a factor of two.) \emph{(b) Distributional
+identities}, in two steps that are ``the chain, not the conclusion'': the transformed process is
+Gaussian \emph{by construction} (a deterministic linear time-change of a Gaussian process is Gaussian,
+laws being closed under linear maps) --- a proof, not something the samples establish; App.~B.5 then
+upgrades a match of the \emph{full} covariance into equality in law (e.g.\ $c^{-1/2}W(ct)\overset{d}{=}
+W(t)$); and Cram\'er--Wold projections --- fixed linear functionals $a^\top X$, each KS-tested against
+$N(0,a^\top\Sigma a)$ --- supply the evidence that would catch a non-Gaussian impostor carrying the
+right covariance, which is precisely the evidence App.~B.5 alone cannot give. The KL coefficients are
+checked the same way (empirical correlation of the $\xi_k$ is $\approx I$ and each $\xi_k$ is KS-tested
+against $N(0,\lambda_k)$: uncorrelated \emph{and} jointly Gaussian $\Rightarrow$ independent, the KL
+expansion's actual content). Bridge endpoints are pinned at $t=0,1$ via the covariance/Cholesky route,
+because the time-change formula $B_t=(1-t)W(t/(1-t))$ cannot be evaluated at $t=1$. \emph{(c) The
+cross-check:} on $[0,T]$ the OU KL eigenvalues converge, by the large-$T$ Toeplitz/Grenander--Szeg\H{o}
+limit, to $\lambda_k\to\hat R(\omega_k)$, $\omega_k=k\pi/T$, where $\hat R(\omega)=2\pi\,S(\omega)$ is
+the \emph{un-normalized} operator symbol --- the Nystr\"om eigenproblem carries no $1/2\pi$, so its
+eigenvalues converge to $\hat R$, not to the Unit-1 density $S$ (which is $2\pi$ smaller). The
+convergence is distributional, not uniform in $k$ (Szeg\H{o} controls linear statistics, weakest at
+the spectral edges), so the gate is on the resolved-bulk gap shrinking with $T$ --- never a $\max_k$
+over the whole spectrum --- and no theoretical decay exponent is claimed. This is a \emph{deterministic}
+slope (the gap is computed against the analytic $\hat R$, not a Welch estimate). \extnote{the
+Toeplitz/Szeg\H{o} asymptotic, the Cram\'er--Wold device, and the Kolmogorov--Smirnov statistic and its
+finite-sample critical values are standard but external to Pavliotis.}
+\item[Falsifier] Repeat the self-similarity identity with the \emph{wrong} exponent,
+$c^{-1/3}W(ct)$: the empirical covariance no longer matches $\min(t,s)$ (it is off by $c^{1/3}$),
+which is what makes the correct $c^{-1/2}$ meaningful. Fully self-contained.
+\item[Depends on / enables] $\Leftarrow$ Units~0, 1, 2 (the three sampling routes). Enables Units~5
+and~7.
+\item[Deliverable shape] Reuses \texttt{sample\_cholesky} / \texttt{sample\_kl} /
+\texttt{sample\_circulant\_embedding}, \texttt{empirical\_cov} (also per half, for the split-half
+null), \texttt{nystrom\_eigen} (the cross-check eigenvalues), the three catalogue kernels including a
+new Brownian-bridge kernel, and Welch (only for the visual $S$-overlay in the artifact, never the
+gate). It introduces \emph{one} new \texttt{src/} module, \texttt{gof.jl} (a Kolmogorov--Smirnov
+statistic): deliberately \emph{not} an operation on $\mathcal{C}$ --- the one considered exception to
+the organizing principle --- placed in \texttt{src/} rather than the experiment folder because two
+units need it (Cram\'er--Wold here, Donsker rates in Unit~5) and \texttt{src/} is the tier that gets a
+deterministic test. The \texttt{experiments/03\_process\_zoo} experiment emits a three-panel portrait
+per process, a route-equivalence panel plotting the pairwise distances against the split-half null
+band, a Cram\'er--Wold per-projection panel, the KL-coefficient correlation/normality check, the
+pinned bridge endpoints, the cross-check $\log g(T)$-vs-$\log T$ plot with its fitted slope, and the
+wrong-exponent control.
+\item[Effort \& risk] $\approx 8$\,h --- almost entirely reuse; the added hour is the Cram\'er--Wold
+projections, the split-half calibration, and \texttt{gof.jl} with its deterministic test. Dominant
+risk: the \hyperref[sec:risk]{estimator-noise-floor family} applied to the cross-check bulk gap ---
+gate on the bulk, never on a $\max_k$ where the edge eigenvalues Szeg\H{o} does not control can stall
+the decay.
+\item[Status] Build: \textbf{shipped}. Cut: \textbf{core}.
+\end{brief}
 
 % ---------------------------------------------------------------
 \subsection*{Unit 4 --- Ergodicity as Loop-Closer}
 \addcontentsline{toc}{subsection}{Unit 4 --- Ergodicity as Loop-Closer}
-\begin{unitmeta}
-\item[Concept] Ergodic properties of stationary processes \pav{\S1.2}; the $L^2$ law of large numbers, Prop.~1.16 \eqref{eq:ergodic}, valid under $C\in L^1(0,\infty)$; the finite-$T$ variance identity, Lemma~1.17 \eqref{eq:ergodic-rate}; the Green--Kubo formula \eqref{eq:greenkubo}; Remark~1.19 (the generalization to $f(X_t)$).
-\item[Build] For the stationary OU process, estimate mean and covariance two ways: from \emph{one long path} (time average) and from \emph{many short paths} (ensemble average); track the running time-average as a function of $T$; estimate the variance of the time-average across an ensemble of length-$T$ paths.
-\item[Check] The variance of the time-average against the ergodic rate; the Green--Kubo growth of the integrated process; the running average against the ensemble mean.
-\item[Analytic target] $\operatorname{Var}\!\left(\frac{1}{T}\int_0^T X_s\,ds\right)\to \frac{2\Dstar}{T} = \frac{2D}{T\alpha^2}$ (both slope and constant, carrying $\alpha$); Green--Kubo: $\mathbb{E}\big(\int_0^t X_s\,ds\big)^2 \to 2\Dstar t = \frac{2D}{\alpha^2}\,t$.
-\item[Pass/fail] Fit $\log\operatorname{Var}$ vs.\ $\log T$; gate slope against $-1$ within $2.5\,\mathrm{SE}$ \emph{and} the fitted constant against $2\Dstar$ within $10\%$ (the constant is what pins $\alpha$). Green--Kubo: fitted MSD slope against $2\Dstar$ within $10\%$.
-\item[Negative control] Feed the \emph{same} \texttt{time\_average\_variance} a synthetic stationary process with a \emph{non-integrable} correlation, $C(u)\propto(1+u)^{-1/2}$ (so $C\notin L^1$): the variance decays slower than $1/T$ and the fitted slope departs from $-1$. This shows Prop.~1.16's $L^1$ hypothesis is load-bearing --- self-contained, with no forward reference to fBm (Unit~6 does the full fBm version).
-\item[Artifact] Running time-average converging to the ensemble mean, plotted with a $\pm\sqrt{2\Dstar/T} = \pm\sqrt{2D/(T\alpha^2)}$ band; variance-vs-$T$ log--log with the fitted $-1$ slope; mean-square-displacement-vs-$t$ with fitted slope $2\Dstar = 2D/\alpha^2$; the non-integrable-$C$ control on the same axes.
-\item[README] Concept: ergodicity is the $L^2$ law of large numbers, and correlation decay is what licenses inferring an ensemble fact from a single path. Why this check: the $1/T$ rate and its constant are the quantitative signature, and breaking it on $C\notin L^1$ shows the hypothesis is essential, not decorative. What it proves: the entire project's one-path-vs-analytic methodology (Units 0--3) is justified, and its limits are demonstrated. \emph{This is the methodological keystone --- the strongest single piece of evidence in the repository.}
-\item[Missteps] (i) \emph{Confusing the time-average with its variance:} one long path gives a single realization of $\frac1T\int X$, \emph{not} its variance; the variance needs an \emph{ensemble} of length-$T$ paths. Guard: \texttt{time\_average\_variance} takes a path \emph{matrix}. (ii) \emph{Band constant:} compute the $\pm\sqrt{2\Dstar/T}$ band with $\Dstar=D/\alpha^2$, not $D$. (iii) \emph{Integral quadrature:} integrate the path with a consistent trapezoid rule, matching the sampler's grid.
-\item[Purpose] The methodological justification, made concrete, for why every theoretical check in Units~0--3 is permitted to compare \emph{one} simulated path against an analytic target.
-\item[Effort] $\approx 6$ h.
-\item[Prerequisite] Ergodicity is strictly stronger than stationarity --- it additionally requires correlation decay ($C\in L^1$); this $L^2$ law of large numbers is the probabilistic core of the entire project. (Birkhoff's a.s.\ ergodic theorem is a deeper, unnecessary refinement here.) \pav{\S1.2, Prop.~1.16}
-\end{unitmeta}
-
-\begin{contracttable}
-\texttt{ergodic.jl} & \texttt{running\_time\_average(x, dt)} & cumulative $\frac1t\int_0^t X_s\,ds$ along one path \\
- & \texttt{time\_average\_variance(paths, dt; horizons)} & $(T\text{-values},\ \widehat{\operatorname{Var}})$ across an ensemble \\
- & \texttt{msd\_integrated(paths, dt)} & $(t,\ \mathbb{E}(\int_0^t X)^2)$ \\
- & \texttt{greenkubo\_coefficient(; D, alpha)} & $\Dstar = D/\alpha^2$ \\
-\texttt{sampling.jl} & \texttt{sample\_circulant\_embedding} / \texttt{sample\_cholesky} & OU paths (reused) \\
-\end{contracttable}
-\noindent\textbf{\texttt{experiments/04\_ergodicity/run.jl}} produces: (i) $(T,\ \widehat{\operatorname{Var}})$ with fitted $1/T$ slope and constant vs.\ $2\Dstar$; (ii) $(t,\ \text{MSD})$ with fitted slope vs.\ $2\Dstar$; (iii) the running-average path with the $\pm\sqrt{2\Dstar/T}$ band; (iv) the synthetic non-integrable-$C$ control.
+\begin{brief}
+\item[Idea] The ergodic properties of stationary processes \pav{\S1.2}: the $L^2$ law of large
+numbers \pav{Prop.~1.16, \eqref{eq:ergodic}}, valid under $C\in L^1(0,\infty)$; the finite-$T$
+variance identity \pav{Lemma~1.17, \eqref{eq:ergodic-rate}}; and the Green--Kubo formula
+\eqref{eq:greenkubo}.
+\item[Proves] For stationary OU, the variance of the time-average obeys
+$\operatorname{Var}\!\big(\tfrac1T\int_0^T X_s\,ds\big)\to \tfrac{2\Dstar}{T}=\tfrac{2D}{T\alpha^2}$
+--- both the slope $-1$ and the constant, the latter carrying $\alpha$ --- and the integrated process
+grows as $\mathbb{E}\big(\int_0^t X_s\,ds\big)^2\to 2\Dstar t = \tfrac{2D}{\alpha^2}t$. The headline
+artifact is the variance-vs-$T$ log--log slope gated stochastically against $-1$, together with the
+fitted constant against $2\Dstar$ (the constant is what pins $\alpha$). \emph{This is the
+methodological keystone}: it is the justification for the whole project's one-path-vs-analytic
+methodology used in Units~0--3.
+\item[Falsifier] Feed the \emph{same} time-average-variance estimator a synthetic stationary process
+with a \emph{non-integrable} correlation, $C(u)\propto(1+u)^{-1/2}$ (so $C\notin L^1$): the variance
+decays slower than $1/T$ and the fitted slope departs from $-1$ --- Prop.~1.16's $L^1$ hypothesis
+shown load-bearing. Self-contained, with no forward reference to fBm (Unit~6 runs the genuine-process
+version).
+\item[Depends on / enables] $\Leftarrow$ Units~0 and~1 --- reuses Unit-1 circulant (preferred) or
+Unit-0 Cholesky for OU paths. Enables Unit~6.
+\item[Deliverable shape] A new \texttt{ergodic.jl} (a running time-average along one path, the
+time-average variance across an \emph{ensemble} of length-$T$ paths, the integrated mean-square
+displacement, and the Green--Kubo coefficient $\Dstar=D/\alpha^2$), plus the reused OU sampler. The
+\texttt{experiments/04\_ergodicity} experiment emits the variance-vs-$T$ log--log with the fitted
+$1/T$ slope and constant, the MSD-vs-$t$ with fitted slope, the running-average path with a
+$\pm\sqrt{2\Dstar/T}$ band, and the non-integrable-$C$ control.
+\item[Effort \& risk] $\approx 6$\,h. Dominant risk: confusing the time-average with its variance ---
+one long path gives a single realization, not the variance, which needs an ensemble (a path
+\emph{matrix}), so compute the $\pm\sqrt{2\Dstar/T}$ band with $\Dstar=D/\alpha^2$, not $D$.
+\item[Status] Build: \textbf{planned}. Cut: \textbf{core}.
+\end{brief}
 
 % ---------------------------------------------------------------
 \subsection*{Unit 5 --- Brownian Motion as a Scaling Limit (Random Walk $\to$ BM)}
 \addcontentsline{toc}{subsection}{Unit 5 --- Brownian Motion as a Scaling Limit}
-\begin{unitmeta}
-\item[Concept] Brownian motion as the weak limit of a rescaled random walk \pav{\S1.3}: for iid mean-zero, variance-one $\{\xi_j\}$ with $S_n=\sum_{j=1}^n\xi_j$, the interpolated, rescaled walk
-\[
-W^n_t \;=\; \tfrac{1}{\sqrt{n}}S_{[nt]} + (nt-[nt])\,\tfrac{1}{\sqrt{n}}\xi_{[nt]+1}
-\]
-converges weakly to a standard Brownian motion as $n\to\infty$. This is BM's \emph{construction}, complementary to the covariance-operator picture: a statement about laws on path space rather than an operation on $\mathcal{C}$.
-\item[Build] Simulate rescaled random walks for a ladder of $n$ over \emph{three} increment laws chosen to separate universality of the limit from law-dependence of the rate: \textbf{Rademacher} and \textbf{uniform} (both symmetric) and a \textbf{centered exponential} $\xi = E-1$, $E\sim\mathrm{Exp}(1)$ (asymmetric, skewness $2$); interpolate to a common grid; collect one-time marginals, two-time covariances, and a path functional (running maximum).
-\item[Check] Convergence of the finite-dimensional distributions and of a path functional to the Gaussian/BM target; the \emph{rate} of marginal convergence, per law.
-\item[Analytic target] One-time marginal $W^n_1 \Rightarrow N(0,1)$; two-time covariance $\to\min(s,t)$; running-maximum distribution converging across laws. \textbf{Marginal-rate target (corrected):} the Kolmogorov--Smirnov statistic decays at a \emph{law-dependent} rate. Berry--Esseen bounds it by $O(n^{-1/2})$, but that rate is achieved only when the skewness is nonzero: for a symmetric increment the leading $n^{-1/2}$ Edgeworth term vanishes, leaving the $O(n^{-1})$ kurtosis term. Hence the target is $\propto n^{-1/2}$ for the \emph{exponential} law and $\propto n^{-1}$ for \emph{Rademacher} and \emph{uniform}. \extnote{Edgeworth expansion / Berry--Esseen; standard, external to Pavliotis. High confidence.}
-\item[Pass/fail] Fit $\log(\text{KS})$ vs.\ $\log n$ \emph{per law}; gate the exponential-law slope against $-\tfrac12$ and the two symmetric-law slopes against $-1$, each within $2.5\,\mathrm{SE}$. Covariance: empirical $\to\min(s,t)$ within MC tolerance.
-\item[Negative control] Add an \emph{infinite-variance} increment (symmetric Pareto with tail index $<2$): the rescaled walk does not converge to $N(0,1)$ at all --- $W^n_1$ departs from the QQ line, its empirical variance \emph{grows} with $n$ instead of settling at $1$, and $n^{-1/2}$ is simply the wrong normalization. This shows the finite-variance hypothesis of Donsker is load-bearing.
-\item[Artifact] Overlaid rescaled-walk paths at increasing $n$; marginal histogram / QQ-plot vs.\ $N(0,1)$; empirical vs.\ $\min(s,t)$ covariance; KS-statistic-vs-$n$ log--log \emph{with one line per law}, the exponential at slope $-\tfrac12$ and the symmetric laws at $-1$; the infinite-variance control on the same QQ axes.
-\item[README] Concept: BM is the Donsker scaling limit --- a statement about laws on path space, complementary to the covariance picture. Why this check: the finite-dimensional distributions and a path functional converge, and the marginal \emph{rate} follows Berry--Esseen but depends on skewness, disappearing entirely without finite variance. What it proves: universality of the \emph{limit} but law-dependence of the \emph{rate} --- the subtle probabilistic content of \S1.3, demonstrated rather than asserted.
-\item[Missteps] (i) \emph{Expecting $n^{-1/2}$ for the symmetric laws} --- it is $n^{-1}$; a ``too steep'' slope is correct, not a bug. (ii) \emph{Too few replicates per $n$} --- the KS statistic is itself noisy; use enough Monte-Carlo replicates to fit a clean slope. (iii) \emph{Interpolation} --- keep the linear-interpolation term so $W^n_t$ is continuous, or the running-maximum functional is biased.
-\item[Purpose] The one unit where a \emph{process} (not merely a moment) is shown to converge, closing the \S1.3 story of where Brownian motion comes from; it also motivates, concretely, why BM is the canonical object the rest of the project revolves around.
-\item[Status] \textbf{Committed.}
-\item[Effort] $\approx 4$--$5$ h (plus a small buffer for the law-dependent-rate surprise).
-\item[Prerequisite] This is weak convergence of processes, which sits slightly \emph{outside} the covariance-operator hub --- a statement about laws on path space, not an operation on $\mathcal{C}$; it is included because BM-as-a-limit is core \S1.3 content. \extnote{Donsker's invariance principle / functional CLT is standard but external to the second-order framing of Chapter~1; Berry--Esseen supplies the $n^{-1/2}$ marginal bound, and the Edgeworth expansion the $n^{-1}$ symmetric-law rate.}
-\end{unitmeta}
-
-\begin{contracttable}
-\texttt{run.jl}-local & \texttt{rescaled\_walk(xi\_sampler, n, t\_grid, rng)} & one interpolated path $W^n_t$ \\
-\texttt{gof.jl} & \texttt{ks\_statistic(samples, cdf)} & KS distance of $W^n_1$ to $N(0,1)$; reused from Unit~3 \\
-\texttt{gaussianprocess.jl} & \texttt{empirical\_cov(paths)} & two-time covariance $\to\min(s,t)$ \\
-\end{contracttable}
-\noindent\textbf{No new \texttt{src/} code} --- the \emph{process} builders live in the experiment, weak convergence of laws not being an operation on $\mathcal{C}$; the one library call is \texttt{gof.jl}'s \texttt{ks\_statistic}, introduced by Unit~3 and reused here rather than duplicated. \textbf{\texttt{experiments/05\_bm\_scaling\_limit/run.jl}} produces: (i) overlaid rescaled paths at increasing $n$; (ii) marginal histogram/QQ vs.\ $N(0,1)$; (iii) $(n,\text{KS})$ log--log, one line per increment law; (iv) empirical vs.\ $\min(s,t)$; (v) running-max across laws; (vi) the infinite-variance control.
+\begin{brief}
+\item[Idea] Brownian motion as the weak (Donsker) limit of a rescaled random walk \pav{\S1.3}: for
+iid mean-zero, variance-one increments the interpolated, rescaled walk converges weakly to a standard
+Brownian motion. This is BM's \emph{construction} --- a statement about laws on path space,
+complementary to the covariance-operator picture and deliberately off the $\mathcal{C}$-spine.
+\item[Proves] The finite-dimensional distributions and a path functional (the running maximum)
+converge to the Gaussian/BM target: the one-time marginal $\Rightarrow N(0,1)$, the two-time
+covariance $\to\min(s,t)$. The \emph{marginal-convergence rate is law-dependent}: Berry--Esseen bounds
+the Kolmogorov--Smirnov statistic by $O(n^{-1/2})$, but that rate is achieved only when the skewness is
+nonzero --- for a symmetric increment the leading $n^{-1/2}$ Edgeworth term vanishes, leaving the
+$O(n^{-1})$ term. So the target is $\propto n^{-1/2}$ for an \emph{exponential} (skewed) increment and
+$\propto n^{-1}$ for \emph{Rademacher} and \emph{uniform} (symmetric) ones. The headline artifact is
+the KS-vs-$n$ log--log plot with one line per law, each slope gated stochastically. \extnote{Donsker's
+invariance principle / the functional CLT; Berry--Esseen for the $n^{-1/2}$ bound and the Edgeworth
+expansion for the $n^{-1}$ symmetric-law rate. Standard, external to the second-order framing;
+high confidence.}
+\item[Falsifier] Add an \emph{infinite-variance} increment (symmetric Pareto, tail index $<2$): the
+rescaled walk does not converge to $N(0,1)$ at all --- the marginal departs from the QQ line, its
+empirical variance \emph{grows} with $n$ instead of settling at $1$, and $n^{-1/2}$ is simply the
+wrong normalization --- showing Donsker's finite-variance hypothesis is load-bearing.
+\item[Depends on / enables] $\Leftarrow$ Units~0 (the empirical covariance) and~3 (\texttt{gof.jl}'s
+KS statistic). Enables nothing.
+\item[Deliverable shape] \emph{No new \texttt{src/} code} --- the rescaled-walk builders live in the
+experiment, weak convergence of laws not being an operation on $\mathcal{C}$; the one library call is
+\texttt{gof.jl}'s \texttt{ks\_statistic}, introduced by Unit~3 and reused rather than duplicated. The
+\texttt{experiments/05\_bm\_scaling\_limit} experiment emits overlaid rescaled paths at increasing
+$n$, a marginal histogram/QQ against $N(0,1)$, the KS-vs-$n$ log--log with one line per increment law,
+the empirical-vs-$\min(s,t)$ covariance, the running-maximum across laws, and the infinite-variance
+control.
+\item[Effort \& risk] $\approx 4$--$5$\,h (plus a small buffer for the law-dependent-rate surprise).
+Dominant risk: expecting $n^{-1/2}$ for the symmetric laws --- a ``too steep'' $-1$ slope is correct,
+not a bug.
+\item[Status] Build: \textbf{planned}. Cut: \textbf{core}.
+\end{brief}
 
 % ---------------------------------------------------------------
 \subsection*{Unit 6 --- Fractional Brownian Motion}
 \addcontentsline{toc}{subsection}{Unit 6 --- Fractional Brownian Motion}
-\begin{unitmeta}
-\item[Concept] Self-similarity/scaling \pav{eqn.~1.28, Prop.~1.27}; long-range dependence for Hurst parameter $H\neq\tfrac12$; covariance
+\begin{brief}
+\item[Idea] A one-exponent generalization of Brownian motion tuning both self-similarity and increment
+correlation \pav{Def.~1.26, Prop.~1.27}, with covariance
 \begin{equation}
 R_H(t,s) = \tfrac{1}{2}\left(|t|^{2H} + |s|^{2H} - |t-s|^{2H}\right).
 \label{eq:fbm}
 \end{equation}
-\pav{Def.~1.26, eqn.~1.27}
-\item[Build] Sample via Cholesky (with jitter) and --- more efficiently --- via circulant embedding (Unit~1's Route~4), noting that for fBm the plain symmetric embedding is not always nonnegative definite and a larger / minimal-nonnegative embedding may be required. Reuse \texttt{nystrom\_eigen} for the eigenvalue-decay contrast and \texttt{time\_average\_variance} for the ergodic-breakage control.
-\item[Check] Empirical vs.\ analytic covariance for several $H$; the self-similarity identity; the eigenvalue-decay contrast with BM; and the ergodic breakage at $H>\tfrac12$.
-\item[Analytic target] $R_H(t,s)=\tfrac12(|t|^{2H}+|s|^{2H}-|t-s|^{2H})$ for $H\in\{0.3,0.5,0.8\}$; self-similarity $W^H_{ct}\overset{d}{=}c^{H}W^H_t$ \pav{eqn.~1.28}; eigenvalue decay of $\mathcal{C}_H$ contrasted with the $k^{-2}$ decay of Brownian motion.
-\item[Pass/fail] $\|\widehat R_H-R_H\|_F/\|R_H\|_F <$ MC tolerance for each $H$; self-similarity as a covariance identity within MC tolerance; and --- for the control --- the fitted ergodic slope at $H=0.8$ \emph{departing from} $-1$ (predicate: $|\text{slope}+1| > $ several SE, i.e.\ the $1/T$ rate provably breaks).
-\item[Negative control] The full fBm version of Unit~4's control: apply \texttt{time\_average\_variance} to $H=0.8$. The increments have non-summable correlations ($C\notin L^1$), so the $1/T$ ergodic rate breaks --- the first genuine process where Unit~4's machinery fails, run rather than asserted.
-\item[Artifact] Sample paths at $H=0.3,0.5,0.8$ (rougher $\to$ smoother); covariance heat-map; self-similarity scaling check; eigenvalue-decay overlay against BM's $k^{-2}$; the $H=0.8$ ergodic-breakage panel.
-\item[README] Concept: fBm is a one-exponent generalization of BM tuning both self-similarity and increment correlation. Why this check: the covariance match and self-similarity confirm the kernel fits the hub, while the ergodic breakage at $H>\tfrac12$ demonstrates the boundary of Unit~4's machinery. What it proves: the hub accommodates a qualitatively new kernel, and the ergodic loop-closer's limits are shown, not merely stated.
-\item[Missteps] (i) \emph{Circulant non-negativity fails for fBm} --- the plain embedding can have negative eigenvalues; enlarge to the minimal nonnegative (Dietrich--Newsam) embedding. (ii) \emph{Cholesky near-singularity} for $H\to1$ --- report jitter and prefer circulant. (iii) \emph{Variance normalization} --- $R_H(t,t)=|t|^{2H}$; a missing factor $\tfrac12$ is the usual slip.
-\item[Purpose] A genuine covariance case study that fits the hub (fBm is just another kernel) yet is qualitatively new: for $H>\tfrac12$ the increment correlations are \emph{non-summable} (long-range dependence), so $C\notin L^1$ and the ergodic loop-closer of Unit~4 does \emph{not} directly apply --- the first process where that machinery breaks, which is precisely why it is instructive.
-\item[Status] \textbf{Committed} (promoted from stretch); alongside Unit~7 it is the material to trim first if the buffer is somehow consumed.
-\item[Effort] $\approx 5$--$6$ h; flagged for the debugging buffer (circulant non-negativity).
-\item[Prerequisite] fBm generalizes BM ($H=\tfrac12$) through a single exponent controlling both self-similarity and increment correlation. \extnote{circulant embedding for fBm (Dietrich--Newsam) and the nonnegative-embedding caveat are standard but external to Pavliotis.}
-\end{unitmeta}
-
-\begin{contracttable}
-\texttt{kernels.jl} & \texttt{fbm\_kernel(t, s; H=0.5)} & fBm covariance $R_H$ \\
-\texttt{sampling.jl} & \texttt{sample\_cholesky} (jittered), \texttt{sample\_circulant\_embedding} & fBm paths (minimal-nonneg caveat) \\
-\texttt{kl.jl} & \texttt{nystrom\_eigen(R\_H, nodes, weights)} & eigenvalue-decay contrast vs.\ $k^{-2}$ \\
-\texttt{ergodic.jl} & \texttt{time\_average\_variance(paths, dt; horizons)} & the $H=0.8$ breakage control \\
-\end{contracttable}
-\noindent\textbf{\texttt{experiments/06\_fbm/run.jl}} produces: (i) paths at $H\in\{0.3,0.5,0.8\}$; (ii) empirical-vs-analytic $R_H$ heat-maps; (iii) the self-similarity covariance check; (iv) the $\mathcal{C}_H$ eigenvalue-decay overlay against BM; (v) the ergodic-breakage panel at $H=0.8$.
+\pav{eqn.~1.27}
+\item[Proves] The empirical covariance matches $R_H$ for several $H$; the self-similarity identity
+$W^H_{ct}\overset{d}{=}c^{H}W^H_t$ \pav{eqn.~1.28} holds as a covariance identity; and the eigenvalue
+decay of $\mathcal{C}_H$ contrasts with Brownian motion's $k^{-2}$. The headline artifacts are the
+covariance and self-similarity matches together with the eigenvalue-decay overlay --- and, as the
+control below, the ergodic breakage at $H>\tfrac12$.
+\item[Falsifier] The full fBm version of Unit~4's control: apply the time-average-variance estimator
+at $H=0.8$. The increments have non-summable correlations ($C\notin L^1$), so the $1/T$ ergodic rate
+breaks --- the first genuine process where Unit~4's machinery fails, run rather than asserted.
+\item[Depends on / enables] $\Leftarrow$ Units~1 (circulant sampler, with the fBm
+minimal-nonnegative-embedding caveat), 2 (\texttt{nystrom\_eigen} for the decay contrast), and 4
+(the time-average-variance estimator for the breakage control); also Unit~0's Cholesky. Enables
+nothing.
+\item[Deliverable shape] \texttt{kernels.jl} gains the fBm kernel; the unit reuses the circulant and
+Cholesky samplers, \texttt{nystrom\_eigen}, and \texttt{time\_average\_variance}. The
+\texttt{experiments/06\_fbm} experiment emits paths at $H\in\{0.3,0.5,0.8\}$ (rougher to smoother),
+covariance heat-maps, the self-similarity scaling check, the $\mathcal{C}_H$ eigenvalue-decay overlay
+against BM, and the $H=0.8$ ergodic-breakage panel.
+\item[Effort \& risk] $\approx 5$--$6$\,h. Dominant risk: circulant non-negativity fails for fBm ---
+the plain symmetric embedding can have negative eigenvalues, so enlarge to the minimal-nonnegative
+(Dietrich--Newsam) embedding \extnote{fBm circulant embedding (Dietrich--Newsam) and the
+nonnegative-embedding caveat are standard but external to Pavliotis.} --- part of the
+\hyperref[sec:risk]{FFT/normalization and noise-floor families}.
+\item[Status] Build: \textbf{planned}. Cut: \textbf{cuttable --- trim second}.
+\end{brief}
 
 % ---------------------------------------------------------------
 \subsection*{Unit 7 --- SDE Bridge: OU Invariant Law and Strong vs.\ Weak Convergence}
-\addcontentsline{toc}{subsection}{Unit 7 --- SDE Bridge: Strong vs.\ Weak Convergence}
-\begin{unitmeta}
-\item[Concept] The OU stochastic differential equation with \emph{additive} noise,
+\addcontentsline{toc}{subsection}{Unit 7 --- SDE Bridge (Strong vs.\ Weak Convergence)}
+\begin{brief}
+\item[Idea] The dynamical (SDE) view that bridges to Chapter~3. The OU SDE with \emph{additive} noise,
 \begin{equation}
 dX_t = -\alpha X_t\,dt + \sqrt{2D}\,dW_t,
 \label{eq:ou-sde}
 \end{equation}
-whose stationary law is $N(0,D/\alpha)$ with covariance $\tfrac{D}{\alpha}e^{-\alpha|\tau|}$ \pav{cf.\ Ch.~2, Example 2.5} --- note $\sqrt{2D}$ makes the stationary variance $\tfrac{(\sqrt{2D})^2}{2\alpha}=D/\alpha$ agree with the Unit~3 kernel; and its Euler--Maruyama (EM) discretization. The strong/weak-convergence \emph{distinction} is demonstrated on the geometric-Brownian-motion SDE with \emph{multiplicative} noise,
+has stationary law $N(0,D/\alpha)$ with covariance $\tfrac{D}{\alpha}e^{-\alpha|\tau|}$ \pav{cf.\
+Ch.~2, Example 2.5} --- the $\sqrt{2D}$ makes the stationary variance agree with the Unit-3 kernel ---
+and its Euler--Maruyama discretization. The strong/weak-convergence \emph{distinction} is demonstrated
+on geometric Brownian motion with \emph{multiplicative} noise,
 \begin{equation}
-dY_t = \mu Y_t\,dt + \sigma Y_t\,dW_t, \qquad Y_t = Y_0\exp\!\big((\mu-\tfrac12\sigma^2)t + \sigma W_t\big),
+dY_t = \mu Y_t\,dt + \sigma Y_t\,dW_t, \qquad
+Y_t = Y_0\exp\!\big((\mu-\tfrac12\sigma^2)t + \sigma W_t\big),
 \label{eq:gbm}
 \end{equation}
 which has a closed-form solution against which both errors can be measured.
-\item[Build] An EM integrator (optionally Milstein); apply it to \eqref{eq:ou-sde} (invariant law/covariance vs.\ the exact stationary OU of Unit~3) and to \eqref{eq:gbm} (convergence orders vs.\ the exact solution), sharing the driving path across resolutions via \texttt{coarsen\_increments}.
-\item[Check] (i) OU invariant measure; (ii) GBM strong and weak convergence orders; (iii) the two negative-control contrasts below.
-\item[Analytic target] OU: empirical law $\to N(0,D/\alpha)$ with covariance $\to\frac{D}{\alpha}e^{-\alpha|\tau|}$. GBM: strong error $\mathbb{E}|Y^{\Delta t}_T-Y_T| \propto \Delta t^{1/2}$ (slope $\tfrac12$); weak error $|\mathbb{E}f(Y_T^{\Delta t})-\mathbb{E}f(Y_T)| \propto \Delta t$ (slope $1$).
-\item[Pass/fail] OU: KS distance of the empirical law to $N(0,D/\alpha)$ below tolerance, covariance match within MC tolerance. GBM: fitted strong slope against $\tfrac12$ and weak slope against $1$, each within $2.5\,\mathrm{SE}$, \emph{and} the two fitted slopes separated by more than the sum of their SEs (they must visibly differ).
-\item[Negative control] The most striking falsifier in the project: recompute the GBM strong error with \emph{independent} coarse and fine Brownian paths instead of the shared one. The ``strong error'' stops decaying and plateaus at an $O(1)$ constant (the spread between two unrelated solutions) --- showing that strong convergence is a statement about a \emph{shared} noise realization, and converting the ``coupling trap'' misstep into a demonstration. \emph{Near-free contrast (validates the additive-noise correction):} run the same EM integrator on OU (additive) and GBM (multiplicative) --- OU shows strong order $1.0$ (no gap), GBM shows $0.5$ (gap). One integrator, two noise structures, two orders.
-\item[Artifact] Log--log plot of GBM strong and weak errors with both slopes annotated (and visibly distinct); the un-coupled strong-error plateau on the same axes; the OU-vs-GBM strong-order contrast panel; a note that deterministic Taylor-error analysis predicts neither slope.
-\item[README] Concept: the SDE view is dynamical; EM discretizes it, and strong vs.\ weak convergence are different questions. Why this check: the $0.5$/$1.0$ gap is a multiplicative-noise phenomenon invisible to deterministic Taylor analysis, and --- as the un-coupled control shows --- the strong error is only meaningful when coarse and fine share a driving path. What it proves: the Chapter-3 bridge is understood and the strong/weak distinction (the subtlest SDE-numerics idea) is demonstrated, not asserted.
-\item[Missteps] (i) \emph{The coupling trap} --- share $dW$ across resolutions by subsampling the fine path (\texttt{coarsen\_increments}); the un-coupled version is the control, not the method. (ii) \emph{Weak-error MC floor} --- the weak error ($\sim\Delta t$) is swamped by Monte-Carlo error ($\sim M^{-1/2}$) unless $M$ is large enough; the slope flattens exactly as the eigenvalue floor does. Guard: ensure the MC SE is well below the smallest $\Delta t$ bias. (iii) \emph{Choice of $f$} --- use a smooth observable (e.g.\ $f(y)=y$ or $y^2$) for the weak error.
-\item[Purpose] The explicit bridge from the covariance/spectral view of Chapter~1 to the dynamical (SDE) view of Chapter~3.
-\item[Status] \textbf{Committed}, but the labelled forward pointer to Chapter~3 and therefore the single cut line if the buffer is consumed; nothing in the core depends on it.
-\item[Effort] $\approx 8$ h; flagged for the debugging buffer (coupling + weak-error floor).
-\item[Prerequisite] $\mathbb{E}|\Delta W| = \sqrt{\Delta t}$, \emph{not} $\Delta t$ --- the reason deterministic error analysis does not transfer. For \emph{multiplicative} noise the Milstein correction is nonzero, so EM strong order drops to $0.5$ while weak order stays $1.0$; for \emph{additive} noise that correction vanishes and EM is already strong order $1.0$, collapsing the gap. \extnote{the OU/GBM SDEs and the Euler--Maruyama/Milstein strong/weak convergence orders are Chapter-3 and standard-SDE-numerics material (e.g.\ Kloeden \& Platen); the additive-noise strong-order-1 result is the reason the strong/weak contrast must be shown on multiplicative noise. Used here only as an explicitly labelled forward pointer, not claimed as Chapter-1 content.}
-\end{unitmeta}
-
-\begin{contracttable}
-\texttt{sde.jl} & \texttt{euler\_maruyama(x, a, b, dt, dW)} & one EM step \\
- & \texttt{ou\_step(x, dt, dW; D=1.0, alpha=1.0)} & OU (additive) step \\
- & \texttt{gbm\_exact(Y0, mu, sigma, t, Wt)} & GBM closed-form reference \\
- & \texttt{simulate(step, x0, dt, nsteps, dW)} & full path from a step rule \\
- & \texttt{brownian\_path(dt, nsteps, rng)} & \texttt{(W, dW)} driving path + increments \\
- & \texttt{coarsen\_increments(dW\_fine, m)} & \texttt{dW\_coarse} (shares the path across resolutions) \\
-\end{contracttable}
-\noindent\textbf{\texttt{experiments/07\_sde\_bridge/run.jl}} produces: (i) the OU invariant-law check (histogram/QQ vs.\ $N(0,D/\alpha)$ and covariance vs.\ the exact kernel); (ii) GBM $(\Delta t,\ \text{strong error})$ with the \emph{shared} path and $(\Delta t,\ \text{weak error})$ from many paths, log--log with both slopes; (iii) the un-coupled strong-error plateau; (iv) the OU-vs-GBM strong-order contrast.
+\item[Proves] The EM OU invariant law converges to $N(0,D/\alpha)$ with covariance $\to
+\tfrac{D}{\alpha}e^{-\alpha|\tau|}$ (checked against Unit~3's exact stationary OU); and for GBM the
+strong error $\mathbb{E}|Y^{\Delta t}_T-Y_T|\propto\Delta t^{1/2}$ (slope $\tfrac12$) while the weak
+error $|\mathbb{E}f(Y_T^{\Delta t})-\mathbb{E}f(Y_T)|\propto\Delta t$ (slope $1$). The headline
+artifact is the log--log plot of both GBM errors with their slopes gated stochastically \emph{and}
+shown visibly distinct --- the $0.5$/$1.0$ gap being a multiplicative-noise phenomenon invisible to
+deterministic Taylor analysis. \extnote{the OU/GBM SDEs and the Euler--Maruyama/Milstein strong and
+weak convergence orders are Chapter-3 / standard-SDE-numerics material (Kloeden \& Platen); used here
+only as an explicitly labelled forward pointer.}
+\item[Falsifier] The most striking falsifier in the project: recompute the GBM strong error with
+\emph{independent} coarse and fine Brownian paths instead of the shared one --- the ``strong error''
+stops decaying and plateaus at an $O(1)$ constant, showing strong convergence is a statement about a
+\emph{shared} noise realization. A near-free contrast reinforces it: the same integrator on OU
+(additive noise) shows strong order $1.0$ --- no gap --- because the Milstein correction vanishes for
+additive noise, which is precisely \emph{why} the strong/weak gap must be exhibited on multiplicative
+noise; on GBM the same integrator shows $0.5$.
+\item[Depends on / enables] $\Leftarrow$ Unit~3 (the exact stationary OU the invariant-law check is
+compared against). Enables nothing --- it is the forward pointer.
+\item[Deliverable shape] A new \texttt{sde.jl} (an Euler--Maruyama step, an additive-noise OU step, a
+GBM closed-form reference, a path simulator from a step rule, a driving Brownian path with its
+increments, and a coarsen-increments helper that shares one driving path across resolutions). The
+\texttt{experiments/07\_sde\_bridge} experiment emits the OU invariant-law check (histogram/QQ and
+covariance against the exact kernel), the GBM strong (shared path) and weak (many paths) errors
+log--log with both slopes, the un-coupled strong-error plateau, and the OU-vs-GBM strong-order
+contrast.
+\item[Effort \& risk] $\approx 8$\,h. Dominant risk: the coupling trap (strong-error checks require
+the \emph{same} driving path at coarse and fine steps --- generate the fine path and subsample it; the
+un-coupled version is the control, not the method) and the weak-error Monte-Carlo floor --- both in
+the \hyperref[sec:risk]{risk register}.
+\item[Status] Build: \textbf{planned}. Cut: \textbf{cut line --- trim first} (a pure Chapter-3
+forward pointer; nothing in Units 0--6 depends on it).
+\end{brief}
 
 % =====================================================================
-\section{Repository Structure and Rationale}
+\section{Repository Architecture and Rationale}
 % =====================================================================
 
-The repository separates a small, tested \textbf{library} (\texttt{src/}, organized by \emph{operation on $\mathcal{C}$}) from a narrative, reproducible \textbf{experiment gallery} (\texttt{experiments/}, organized by \emph{unit}). This separation is the central design decision.
+The repository separates a small, tested \textbf{library} (\texttt{src/}, organized by
+\emph{operation on $\mathcal{C}$}) from a narrative, reproducible \textbf{experiment gallery}
+(\texttt{experiments/}, organized by \emph{unit}). This separation is the central design decision.
+Units 00--03 are shipped; 04--07 are planned and are \emph{not} pre-stubbed.
 
-\begin{lstlisting}
-StochProc.jl/
+\begin{verbatim}
+StochasticProcesses.jl/
 |-- Project.toml, Manifest.toml     # both committed: exact reproducibility
 |-- README.md                       # through-line + gallery index
 |-- src/
-|   |-- StochProc.jl                # module definition, exports
-|   |-- kernels.jl                  # R(t,s): min, min-ts, exp, periodic, fBM
-|   |-- gaussianprocess.jl          # GP type, grid assembly, empirical cov
-|   |-- sampling.jl                 # the 4 square roots: Cholesky / KL /
-|   |                               #   random-Fourier / circulant (needs FFTW)
+|   |-- StochasticProcesses.jl      # module definition, flat re-exports
+|   |-- kernels.jl                  # R(t,s): min, min-ts, exp/OU, periodic; (+fBm, Unit 6)
+|   |-- gaussianprocess.jl          # GP type, grid assembly, empirical covariance
+|   |-- sampling.jl                 # the square roots: Cholesky / KL / circulant (FFTW)
+|   |-- spectral.jl                 # Welch & raw periodogram, Bochner transforms, integrators
 |   |-- kl.jl                       # Nystrom quadrature eigenproblem (symmetrized)
-|   |-- spectral.jl                 # Welch periodogram, Bochner transforms
-|   |-- ergodic.jl                  # time-average estimators, Green-Kubo
-|   |-- gof.jl                      # KS statistic (Cramer-Wold checks, Donsker
-|   |                               #   rates); not an operation on C -- see below
-|   `-- sde.jl                      # Euler-Maruyama, Milstein, coupling helpers:
-|                                   #   OU (additive) + geometric BM (multiplicative)
-|-- test/                           # analytic identities, tight tolerances
+|   |-- gof.jl                      # KS statistic; the considered exception -- see below
+|   |-- ergodic.jl                  # time-average estimators, Green-Kubo   (Unit 4, planned)
+|   `-- sde.jl                      # Euler-Maruyama, coupling helpers      (Unit 7, planned)
+|-- test/                           # analytic identities, tight tolerances (CI runs this)
 |   `-- runtests.jl
 |-- experiments/                    # the gallery -- one folder per unit
-|   |-- 00_covariance_core/     {run.jl, README.md, figures/}
-|   |-- 01_spectral_bochner/    {run.jl, README.md, figures/}
-|   |-- 02_kl_quadrature/       {run.jl, README.md, figures/}
-|   |-- 03_process_zoo/         {run.jl, README.md, figures/}
-|   |-- 04_ergodicity/          {run.jl, README.md, figures/}
-|   |-- 05_bm_scaling_limit/    {run.jl, README.md, figures/}
-|   |-- 06_fbm/                 {run.jl, README.md, figures/}
-|   `-- 07_sde_bridge/          {run.jl, README.md, figures/}   # Ch.3 pointer
+|   |-- 00_covariance_core/     {run.jl, README.md, figures/}   # shipped
+|   |-- 01_spectral_bochner/    {run.jl, README.md, figures/}   # shipped
+|   |-- 02_kl_quadrature/       {run.jl, README.md, figures/}   # shipped
+|   |-- 03_process_zoo/         {run.jl, README.md, figures/}   # shipped
+|   |-- 04_ergodicity/          ...                             # planned
+|   |-- 05_bm_scaling_limit/    ...                             # planned
+|   |-- 06_fbm/                 ...                             # planned
+|   `-- 07_sde_bridge/          ...                             # planned (Ch.3 pointer)
+|-- experiments/Project.toml, Manifest.toml   # separate env that `dev`s the package
 `-- .github/workflows/ci.yml
-\end{lstlisting}
+\end{verbatim}
 
-\textbf{Rationale.} \texttt{src/} is organized by \emph{operation on $\mathcal{C}$} --- kernels, the two diagonalizations, the four square roots, the ergodic loop --- rather than by named process (Brownian motion, OU, \ldots). A process is nothing more than a choice of kernel; organizing by operation makes the module structure a faithful expression of the through-line in Section~1 \emph{for the second-order theory of Chapter~1}. Two units sit deliberately at the edge of that spine and are placed among \texttt{experiments/} accordingly: Unit~5 (random walk $\to$ BM) is weak convergence of \emph{laws}, not an operation on $\mathcal{C}$, and its builders live entirely in its experiment folder; Unit~7 (SDE bridge) is a dynamical, generator-flavored Chapter-3 pointer whose only library home is \texttt{sde.jl}. One module, \texttt{gof.jl}, is a considered exception to the organizing principle: a Kolmogorov--Smirnov statistic is not an operation on $\mathcal{C}$ by any reading, but Units~3 and~5 both need one --- for Cram\'er--Wold projections and for Donsker rates respectively --- and the alternative is the same few lines duplicated across two experiment folders where the testing convention gives them no deterministic test at all. It is placed in \texttt{src/} for the test coverage and the single definition, and the principle is stated as bending here rather than quietly redefined to accommodate it. A caveat on scope, stated honestly: the covariance-operator spine is the right organizing principle precisely because Chapter~1 is the Gaussian/second-order chapter. Adding later-chapter material never forces a rewrite of existing files --- one adds modules to \texttt{src/} and numbered folders to \texttt{experiments/} --- but the covariance operator ceases to be the hub. Chapter~2 (diffusions, Markov generators, Chapman--Kolmogorov, the Kolmogorov equations) and Chapter~4 (Fokker--Planck) are centered on the \emph{generator}/transition semigroup on generally non-Gaussian processes; they introduce a second, generator-centered spine \emph{alongside} $\mathcal{C}$, rather than more operations on it. So the code accretes without restructuring, but the single-hub \emph{narrative} is Chapter-1-specific and should not be over-sold as the framework's permanent organizing idea. Each experiment folder remains self-contained and documents concept~$\to$~implementation~$\to$~theoretical check~$\to$~result, which directly serves the goal of leaving durable evidence of understanding rather than evidence of having merely read the material.
+\textbf{Rationale.} \texttt{src/} is organized by \emph{operation on $\mathcal{C}$} --- kernels, the
+two diagonalizations, the square roots, the ergodic loop --- rather than by named process (Brownian
+motion, OU, \ldots). A process is nothing more than a choice of kernel; organizing by operation makes
+the module structure a faithful expression of the through-line \emph{for the second-order theory of
+Chapter~1}. Two units sit deliberately at the edge of that spine and are placed among
+\texttt{experiments/} accordingly: Unit~5 (random walk $\to$ BM) is weak convergence of \emph{laws},
+not an operation on $\mathcal{C}$, and its builders live entirely in its experiment folder; Unit~7
+(SDE bridge) is a dynamical, generator-flavored Chapter-3 pointer whose only library home is
+\texttt{sde.jl}.
+
+One module, \texttt{gof.jl}, is a \emph{considered exception} to the organizing principle: a
+Kolmogorov--Smirnov statistic is not an operation on $\mathcal{C}$ by any reading, but Units~3 and~5
+both need one --- for Cram\'er--Wold projections and for Donsker rates respectively --- and the
+alternative is the same few lines duplicated across two experiment folders where the testing
+convention gives them no deterministic test at all. It is placed in \texttt{src/} for the test
+coverage and the single definition, and the principle is stated as \emph{bending} here rather than
+quietly redefined to accommodate it.
+
+\textbf{The rationale's limit, stated with the rationale.} The covariance-operator spine is the right
+organizing principle precisely because Chapter~1 is the Gaussian/second-order chapter. Adding
+later-chapter material never forces a rewrite of existing files --- one adds modules to \texttt{src/}
+and numbered folders to \texttt{experiments/} --- but the covariance operator ceases to be the hub.
+Chapter~2 (diffusions, Markov generators, the Kolmogorov equations) and Chapter~4 (Fokker--Planck) are
+centered on the \emph{generator}/transition semigroup on generally non-Gaussian processes; they
+introduce a second, generator-centered spine \emph{alongside} $\mathcal{C}$, rather than more
+operations on it. So the code accretes without restructuring, but the single-hub \emph{narrative} is
+Chapter-1-specific and should not be over-sold as the framework's permanent organizing idea. Each
+experiment folder remains self-contained and documents concept~$\to$~implementation~$\to$~theoretical
+check~$\to$~result, which directly serves the goal of leaving durable evidence of understanding.
 
 % =====================================================================
-\section{Reproducibility and Testing Convention}
+\section{Cross-Cutting Conventions}
+\label{sec:conv}
 % =====================================================================
+
+These are load-bearing for reproducibility; violating one silently corrupts every downstream number.
+The concrete values (seeds, jitter, grid sizes, tolerances) are recorded in each experiment, not here.
 
 \begin{itemize}[leftmargin=1.4cm]
-  \item \textbf{Seeding.} Use \texttt{StableRNGs.jl} rather than Julia's default global RNG. \extnote{the default stream is not guaranteed stable across Julia versions, so seeded Monte Carlo checks can silently drift; this is a Julia-ecosystem fact, not a Pavliotis one.} Pass an explicit \texttt{StableRNG(seed)} to every stochastic routine; record the seed in each experiment's README.
-  \item \textbf{Numerical positive-definiteness (Cholesky).} Form $\Sigma$ on the grid and factor $\Sigma + \varepsilon I$ with a small jitter (nugget) $\varepsilon$; under grid refinement, smooth kernels (exponential/OU, fBm) produce rapidly decaying eigenvalues and a numerically indefinite $\Sigma$, and naive \texttt{cholesky(Symmetric($\Sigma$))} will throw. Report the jitter used, and prefer the KL or circulant route for the smoothest kernels where even jittered Cholesky loses accuracy.
-  \item \textbf{Spectral normalization.} Pin the periodogram and Bochner-FFT normalizations so that the discrete $\int\hat S\,d\omega \to R(0)$, matching the $1/2\pi$-on-$S$ convention of \eqref{eq:spectraldensity}; a mismatched estimator normalization is the most likely source of a spurious factor of $2\pi$ in the Unit-1 check. Document the chosen normalization (and the circulant-embedding scaling) in the relevant experiment README.
+  \item \textbf{Seeding.} Use \texttt{StableRNGs.jl}, never Julia's default global RNG. \extnote{the
+  default stream is not guaranteed stable across Julia versions, so seeded Monte Carlo checks can
+  silently drift; a Julia-ecosystem fact, not a Pavliotis one.} Pass an explicit
+  \texttt{StableRNG(seed)} to every stochastic routine and record the seed. Do not reorder RNG draws
+  within an experiment --- demo paths and the ladder pull from one stream, so reordering changes every
+  committed number.
+  \item \textbf{Numerical positive-definiteness (Cholesky).} Form $\Sigma$ on the grid and factor
+  $\Sigma+\varepsilon I$ with a small jitter (nugget) $\varepsilon$, and \emph{report} it: too small
+  gives an indefinite throw, too large biases the covariance. Prefer the KL or circulant route for the
+  smoothest kernels where even jittered Cholesky loses accuracy.
+  \item \textbf{Spectral normalization.} Pin the periodogram and Bochner-FFT normalizations so the
+  discrete $\int\hat S\,d\omega\to R(0)$, matching the $1/2\pi$-on-$S$ convention of
+  \eqref{eq:spectraldensity}; a mismatched normalization is the most likely source of a spurious
+  factor of $2\pi$. Document the chosen normalization (and the circulant-embedding scaling) in the
+  relevant experiment README.
   \item \textbf{Two verification tiers.}
   \begin{enumerate}
-    \item \texttt{test/}: deterministic analytic identities --- kernel symmetry/PSD, the trace identity \eqref{eq:trace} in its general form $\sum_n\lambda_n = \int_0^T R(t,t)\,dt$ (an assembly/quadrature sanity check, plus the stationary specialization $T\,R(0)$ on a stationary kernel), Brownian-motion eigenvalues vs.\ the closed form \eqref{eq:bm-kl} --- checked with tight absolute tolerance, over the resolved eigenvalue range only (see the Unit~2 numerical caution).
-    \item \texttt{experiments/}: Monte Carlo checks with tolerance set to a small multiple of the estimated standard error, seeded so that results are deterministic given the seed. Each experiment README states explicitly which tolerance regime applies.
+    \item \texttt{test/}: deterministic analytic identities --- kernel symmetry/PSD, the trace
+    identity in its general form $\sum_n\lambda_n=\int_0^T R(t,t)\,dt$ (plus the stationary
+    specialization $T\,R(0)$), Brownian-motion eigenvalues vs.\ the closed form \eqref{eq:bm-kl} ---
+    with tight absolute tolerance, over the resolved eigenvalue range only. This is what CI runs.
+    \item \texttt{experiments/}: Monte Carlo checks with tolerance a small multiple of the estimated
+    standard error, seeded so results are deterministic given the seed.
   \end{enumerate}
-  \item \textbf{Rate checks as the primary evidence.} A measured \emph{slope} on a log--log plot is the headline artifact for every unit, and is stronger evidence of correct implementation than a single-point match. Gate the two classes of slope differently:
+  \item \textbf{Tests must bite.} Prefer hand-computed targets over re-running the function's own
+  formula, and non-square / asymmetric fixtures so shape, orientation, and one-sided-implementation
+  bugs cannot hide (e.g.\ the KS statistic is exercised on skewed fixtures, since a symmetric case does
+  not discriminate a one-sided implementation).
+  \item \textbf{Rate checks as the primary evidence.} A measured \emph{slope} on a log--log plot is
+  the headline artifact for every unit, and is stronger evidence of correct implementation than a
+  single-point match. The two classes of slope are gated differently, and \emph{the distinction is not
+  whether the process is random but whether the regression residuals are sampling noise}:
   \begin{itemize}[leftmargin=1.0cm]
-    \item \emph{Stochastic slopes} (Monte Carlo covariance error vs.\ $N^{-1/2}$; Euler--Maruyama strong $0.5$ / weak $1.0$ on GBM; ergodic variance vs.\ $1/T$; the KS-statistic vs.\ $n^{-1/2}$ or $n^{-1}$ of Unit~5): fit the slope on a log--log scale and gate on agreement with the theoretical value to within a small multiple ($2$--$3\times$) of the fitted slope's own standard error --- the estimator variance differs sharply between checks, so a single fixed absolute tolerance would be simultaneously too loose in one place and too tight in another.
-    \item \emph{Deterministic slopes} (the KL eigenvalue-decay slope of Unit~2; the Toeplitz bulk-gap slope $g(T)$ of Unit~3): here the regression residuals are model misspecification --- the asymptotic $k^{-2}$ plus the discretization noise floor for Unit~2, the Szeg\H{o} asymptotic plus the quadrature error for Unit~3 --- \emph{not} sampling noise, so a regression standard error is not a sampling standard error and the SE-based gate is not statistically meaningful. Fit only within the resolved window (above the noise floor, or within the resolved spectral bulk) and gate with a \emph{fixed absolute margin}: for Unit~2 against the theoretical exponent $-2$; for Unit~3, where no defensible theoretical exponent exists, against a fixed negative threshold, with the fitted value reported rather than claimed. The distinction that decides which bullet applies is not whether the \emph{process} is random but whether the \emph{regression residuals} are sampling noise --- Unit~3's gap becomes deterministic precisely because it is computed against the analytic $S$ rather than a Welch estimate.
+    \item \emph{Stochastic slopes} (the Monte-Carlo covariance error $\propto N^{-1/2}$; the
+    Euler--Maruyama strong/weak orders on GBM; the ergodic variance $\propto 1/T$; the Donsker
+    KS-vs-$n$ rates of Unit~5): fit on log--log axes and gate against the theoretical value to within a
+    small multiple of the fitted slope's own standard error --- the estimator variance differs sharply
+    between checks, so a single fixed absolute tolerance would be simultaneously too loose in one place
+    and too tight in another.
+    \item \emph{Deterministic slopes} (the KL eigenvalue-decay slope of Unit~2; the Toeplitz bulk-gap
+    slope of Unit~3): the regression residuals are model misspecification --- the asymptotic $k^{-2}$
+    plus the discretization floor for Unit~2, the Szeg\H{o} asymptotic plus quadrature error for
+    Unit~3 --- \emph{not} sampling noise, so a regression standard error is not a sampling standard
+    error and an SE-based gate is not meaningful. Fit only within the resolved window and gate with a
+    fixed absolute margin: for Unit~2 against the theoretical exponent $-2$; for Unit~3, where no
+    defensible theoretical exponent exists, against a fixed negative threshold, reporting the fitted
+    value rather than claiming it. Unit~3's gap is deterministic precisely because it is computed
+    against the analytic symbol rather than a Welch estimate.
   \end{itemize}
-  \item \textbf{Consolidated risk register (the recurring missteps).} Three failure families recur across units; internalize them once rather than per unit.
-  \begin{itemize}[leftmargin=1.0cm]
-    \item \emph{The FFT/normalization family} (Units 1, 6, 7): one- vs two-sided spectra; angular ($\omega$) vs ordinary ($f=\omega/2\pi$) frequency, worth a factor $2\pi$; FFTW returns unnormalized transforms (restore $\Delta t$, $1/N$); Welch divides by the window power $\sum_n w_n^2$, not $N$; the circulant-embedding scaling is validated once, in Unit~1. Single guard: pin every normalization so the discrete $\int\widehat S\,d\omega\to R(0)$ and unit-test it.
-    \item \emph{The estimator noise floor} (Units 2, 7, and the raw periodogram of Unit 1): every rate check has a level below which the estimator's own variance or discretization dominates and the slope flattens --- the Nystr\"om eigenvalue floor, the weak-error Monte-Carlo floor, and the inconsistent raw periodogram are the \emph{same} phenomenon. Single guard: identify the floor, fit slopes only above it, and state the resolved range.
-    \item \emph{The strong-convergence coupling} (Unit 7): strong-error checks require the \emph{same} driving Brownian path at coarse and fine steps --- generate the fine path first and subsample it (\texttt{coarsen\_increments}). The un-coupled version is a negative control, not the method.
-  \end{itemize}
-  \item \textbf{Continuous integration.} Run \texttt{test/runtests.jl} on push via GitHub Actions --- fast, and it guards the deterministic analytic core of \texttt{src/}. Do \emph{not} run the slower Monte Carlo experiments in CI; run those locally and commit the resulting figures directly.
-  \item \textbf{Environment pinning.} Commit \texttt{Manifest.toml} alongside \texttt{Project.toml} so that \texttt{Pkg.instantiate()} reproduces the exact dependency versions used. Manifest pinning together with explicit RNG seeding gives full end-to-end reproducibility of every figure in the gallery.
+  \item \textbf{Continuous integration.} Run \texttt{test/runtests.jl} on push via GitHub Actions ---
+  fast, guarding the deterministic analytic core. Do \emph{not} run the slower Monte Carlo experiments
+  in CI; run those locally and commit the resulting figures directly. Experiments are headless
+  (\texttt{ENV["GKSwstype"]="100"} before \texttt{gr()}).
+  \item \textbf{Environment pinning.} Commit \texttt{Manifest.toml} alongside \texttt{Project.toml}
+  (for \emph{both} the root package env and the separate \texttt{experiments/} env, which \texttt{dev}s
+  the package via a relative path) so \texttt{Pkg.instantiate()} reproduces exact versions. Manifest
+  pinning plus explicit RNG seeding gives full end-to-end reproducibility of every figure.
 \end{itemize}
 
 % =====================================================================
-\appendix
-\section{Repository Skeleton: Illustrative Stubs}
+\section{Consolidated Risk Register}
+\label{sec:risk}
 % =====================================================================
 
-The following listings illustrate the intended shape of the core library files and the test harness. These are stubs to be filled in per-unit via detailed specifications, not final implementations.
-
-\subsection*{\texttt{src/kernels.jl}}
-\begin{lstlisting}
-module Kernels
-
-export brownian_motion_kernel, brownian_bridge_kernel,
-       exponential_kernel, periodic_kernel, fbm_kernel
-
-"Covariance R(t,s) = min(t,s): standard Brownian motion on [0,T]."
-brownian_motion_kernel(t, s) = min(t, s)
-
-"Covariance R(t,s) = min(t,s) - t*s: Brownian bridge on [0,1]."
-brownian_bridge_kernel(t, s) = min(t, s) - t * s
-
-"Stationary exponential kernel R(tau) = (D/alpha) * exp(-alpha*|tau|);
- corresponds to the stationary Ornstein-Uhlenbeck process (Example 1.15).
- Note: D is the noise strength (C(0)=D/alpha); the Green-Kubo transport
- coefficient is Dstar = int_0^inf C = D/alpha^2, distinct unless alpha=1.
- (Example 1.18 computes exactly this: int_0^inf C = C(0)*tau_cor = D/alpha^2.)"
-exponential_kernel(t, s; D=1.0, alpha=1.0) = (D / alpha) * exp(-alpha * abs(t - s))
-
-"Stationary periodic kernel on the torus [0,1), exp of geodesic distance;
- used for the KL/Bochner coincidence contrast. Positive-definite on the
- circle: its Fourier coefficients Rhat(k) = 2*alpha/(alpha^2+(2*pi*k)^2)
- * (1 - (-1)^k * exp(-alpha/2)) are all > 0 (derived and verified in-house)."
-periodic_kernel(t, s; D=1.0, alpha=1.0) =
-    (D / alpha) * exp(-alpha * min(abs(t - s), 1 - abs(t - s)))
-
-"Covariance R_H(t,s) = 0.5*(|t|^{2H} + |s|^{2H} - |t-s|^{2H}):
- fractional Brownian motion with Hurst parameter H in (0,1).
- H = 1/2 recovers standard Brownian motion; H > 1/2 gives long-range
- dependence (non-summable increment correlations, so C not in L^1)."
-fbm_kernel(t, s; H=0.5) =
-    0.5 * (abs(t)^(2H) + abs(s)^(2H) - abs(t - s)^(2H))
-
-end # module
-\end{lstlisting}
-
-\subsection*{\texttt{src/gaussianprocess.jl}}
-\begin{lstlisting}
-module GaussianProcesses
-
-using LinearAlgebra
-export GaussianProcess, assemble_cov, assemble_mean, empirical_cov
-
-"A second-order Gaussian process over a covariance kernel R(t,s) and an
- optional mean function. A process is nothing more than a choice of kernel;
- mean and covariance determine the law (Appendix B.5)."
-struct GaussianProcess{K,M}
-    kernel::K          # R(t, s)
-    meanfn::M          # m(t)
-end
-GaussianProcess(kernel; meanfn = t -> 0.0) = GaussianProcess(kernel, meanfn)
-
-"Assemble Sigma[i,j] = R(t_i, t_j) on a grid. Returned Symmetric so the
- downstream Cholesky/eigen see an exactly symmetric operand (floating-point
- assembly is not bitwise symmetric otherwise)."
-function assemble_cov(gp::GaussianProcess, t_grid::AbstractVector)
-    R = gp.kernel
-    Sigma = [R(t, s) for t in t_grid, s in t_grid]
-    return Symmetric(Sigma)
-end
-
-"Assemble the mean vector m(t_i) on a grid."
-assemble_mean(gp::GaussianProcess, t_grid::AbstractVector) =
-    [gp.meanfn(t) for t in t_grid]
-
-"Empirical covariance across sample paths. `paths` is n_grid x N with N >= 2
- (one path per COLUMN -- a transpose silently estimates the wrong matrix). The
- Frobenius error vs. assemble_cov decays at the Monte Carlo rate N^{-1/2}
- (the Unit-0 headline check)."
-function empirical_cov(paths::AbstractMatrix)
-    _, N = size(paths)
-    N > 1 || throw(ArgumentError("empirical_cov needs N >= 2 paths (got N=$N); the (N-1) " *
-                                 "denominator is undefined for a single path."))
-    mu = sum(paths, dims = 2) ./ N
-    Xc = paths .- mu
-    return (Xc * Xc') ./ (N - 1)
-end
-
-end # module
-\end{lstlisting}
-
-\subsection*{\texttt{src/sampling.jl}}
-\begin{lstlisting}
-module Sampling
-
-using LinearAlgebra, FFTW
-export sample_cholesky, sample_kl, sample_random_fourier,
-       sample_circulant_embedding
-
-"Route 1 (general): (jittered) Cholesky factorization of the covariance matrix.
- Sigma = L * L', X = L * z, z ~ N(0, I). The nugget eps*I restores
- positive-definiteness when the assembled Sigma is singular or numerically
- indefinite (e.g. a grid through t=0 where R(0,s)=0, or near-duplicate grid
- points)."
-function sample_cholesky(Sigma::AbstractMatrix, rng; jitter=1e-10)
-    n = size(Sigma, 1)
-    L = cholesky(Symmetric(Sigma) + jitter * I(n)).L
-    return L * randn(rng, n)
-end
-
-"Route 2 (general): truncated Karhunen-Loeve expansion.
- X_t = sum_k sqrt(lambda_k) * xi_k * e_k(t), xi_k ~ iid N(0,1)."
-function sample_kl(lambdas::AbstractVector, eigenfuncs::AbstractMatrix, rng)
-    K = length(lambdas)
-    xi = randn(rng, K)
-    return eigenfuncs * (sqrt.(lambdas) .* xi)
-end
-
-"Route 3 (stationary only): random Fourier series with GAUSSIAN amplitudes,
- on a ONE-SIDED frequency grid omega_grid (omega_k > 0; exclude 0):
- X(t) = sum_k [a_k cos(omega_k t) + b_k sin(omega_k t)],
- a_k, b_k ~ iid N(0, 2 * S(omega_k) * dOmega).
- The factor 2 folds the two-sided spectrum onto omega > 0, so that
- Cov(tau) = sum_k 2*S(omega_k)*dOmega * cos(omega_k*tau) -> R(tau).
- Gaussian (not fixed-amplitude random-phase) amplitudes make this a genuine
- square root of C: the finite-K sample is EXACTLY Gaussian and reproduces the
- law, not merely the covariance. (A random-phase foil with fixed amplitude
- sqrt(4*S(omega_k)*dOmega) and uniform phase matches the covariance but is
- Gaussian only in the K -> infinity limit, so it is not a square root.)"
-function sample_random_fourier(S::Function, t_grid, omega_grid, rng)
-    dOmega = step(omega_grid)          # omega_grid one-sided: 0 < omega_1 < ...
-    X = zeros(length(t_grid))
-    for w in omega_grid
-        sigma = sqrt(2 * max(S(w), 0.0) * dOmega)
-        a = sigma * randn(rng)
-        b = sigma * randn(rng)
-        @. X += a * cos(w * t_grid) + b * sin(w * t_grid)
-    end
-    return X
-end
-
-"Route 4 (stationary only): circulant (FFT) embedding -- exact O(m log m)
- sampling on a uniform grid (Wood-Chan / Dietrich-Newsam). r = [R(0), R(dt),
- ..., R((n-1)*dt)] is the first column of the Toeplitz covariance. Embed into
- a symmetric circulant of size m = 2(n-1); its eigenvalues are lambda =
- real(fft(c)). Requires lambda .>= 0 (holds for the exponential/periodic
- kernels; for fBm a larger / minimal-nonnegative embedding may be needed).
- This is the Bochner square root made computational: FFT-diagonalization of
- the (circulant) covariance. NOTE: the exact scaling is the per-unit spec
- detail -- validate against the analytic covariance in Unit 1."
-function sample_circulant_embedding(r::AbstractVector, rng)
-    n = length(r)
-    c = vcat(r, r[end-1:-1:2])                 # length m = 2(n-1)
-    m = length(c)
-    lambda = real(fft(c))                      # circulant eigenvalues
-    all(lambda .>= -1e-10) || error("circulant embedding not PSD; enlarge m")
-    xi = randn(rng, m) .+ im .* randn(rng, m)
-    Y  = fft(sqrt.(max.(lambda, 0.0)) .* xi) ./ sqrt(m)
-    return real(Y[1:n])                        # imag(Y[1:n]) is a 2nd draw
-end
-
-end # module
-\end{lstlisting}
-
-\subsection*{\texttt{src/kl.jl}}
-\begin{lstlisting}
-module KL
-
-using LinearAlgebra
-export quad_nodes_weights, nystrom_eigen, trace_diag, kl_tail_energy
-
-"Quadrature nodes and weights on [0, T]. Trapezoid by default; any positive
- rule works (the Nystrom eigenproblem only needs w_i > 0)."
-function quad_nodes_weights(T; n, rule = :trapezoid)
-    nodes = range(0, T; length = n)
-    if rule == :trapezoid
-        w = fill(step(nodes), n)
-        w[1] *= 0.5
-        w[end] *= 0.5
-    else
-        error("unknown rule: $rule")
-    end
-    return collect(nodes), w
-end
-
-"Nystrom discretization of  int_0^T R(t,s) e(s) ds = lambda * e(t).
- CRITICAL (symmetrization): the naive discretization (K*W) e = lambda e is
- NON-symmetric even though R is symmetric (W = Diagonal(weights)), so its
- eigenvectors are not orthonormal and can come out complex. Solve the
- SYMMETRIC problem (D*K*D) g = lambda g with D = Diagonal(sqrt.(w)), then
- recover e = D^{-1} g. Eigenpairs are returned sorted DESCENDING and
- L2-normalized on the grid (sum_i w_i e_k(t_i)^2 = 1)."
-function nystrom_eigen(R, nodes, weights; nev = length(nodes))
-    K = [R(t, s) for t in nodes, s in nodes]
-    d = sqrt.(weights)
-    A = Symmetric((d * d') .* K)               # D*K*D with D = Diagonal(d)
-    vals, vecs = eigen(A)                       # ascending
-    idx = sortperm(vals; rev = true)[1:nev]
-    lambdas = vals[idx]
-    efns = vecs[:, idx] ./ d                    # e = D^{-1} g (columns)
-    return lambdas, efns
-end
-
-"Grid quadrature of the diagonal:  sum_i w_i R(t_i, t_i) ~ int_0^T R(t,t) dt.
- This is tr(C) in the GENERAL (possibly non-stationary) form and is the
- assembly/quadrature sanity check of Unit 2 -- it validates the weights and
- matrix assembly, NOT the eigensolver. For a stationary kernel R(t,t)=R(0)
- it collapses to T*R(0) (Exercise 23)."
-trace_diag(R, nodes, weights) =
-    sum(w * R(t, t) for (t, w) in zip(nodes, weights))
-
-"Relative KL truncation (tail) energy beyond K modes:
- sum_{k>K} lambda_k / sum_k lambda_k.  Drives the Exercise-28 cost study."
-kl_tail_energy(lambdas::AbstractVector, K::Integer) =
-    sum(lambdas[K+1:end]) / sum(lambdas)
-
-end # module
-\end{lstlisting}
-
-\subsection*{\texttt{src/spectral.jl}}
-\begin{lstlisting}
-module Spectral
-
-using FFTW
-export welch_psd, raw_periodogram, bochner_forward, bochner_inverse,
-       spectral_variance
-
-# Fold a two-sided (omega, S) pair onto omega >= 0, doubling interior bins so
-# that the one-sided integral still returns int S dOmega over the full line.
-function _onesided(omega, S)
-    keep = omega .>= 0
-    o = omega[keep]; s = copy(S[keep])
-    s[2:end] .*= 2                               # double all but the DC bin
-    return o, s
-end
-
-"Welch (averaged, windowed) PSD estimate of a real series x sampled at dt.
- CONSISTENT: its variance shrinks as the number of segments grows. Normalized
- so the discrete int Shat dOmega -> R(0) under the 1/2pi-on-S convention of
- (1.7)-(1.8): angular frequency omega = 2*pi*f, and the window power
- U = sum(win.^2) is divided out (NOT the segment length). Returns a ONE-SIDED
- spectrum by default. NOTE: the exact fold/window convention is the Unit-1
- spec detail -- pin it so int Shat dOmega -> R(0) and unit-test that gate."
-function welch_psd(x, dt; nseg, noverlap = 0, window = :hann, onesided = true)
-    N = length(x); L = div(N, nseg)
-    win = window === :hann ?
-          [0.5 - 0.5 * cos(2pi * k / (L - 1)) for k in 0:L-1] : ones(L)
-    U = sum(abs2, win)                            # window power
-    hop = L - noverlap
-    acc = zeros(L)
-    nused = 0
-    start = 1
-    while start + L - 1 <= N
-        seg = @view x[start:start+L-1]
-        acc .+= abs2.(fft(win .* seg))
-        nused += 1; start += hop
-    end
-    Sfull = (dt / (2pi * U)) .* (acc ./ nused)    # 1/2pi-on-S normalization
-    omega_full = 2pi .* fftfreq(L, 1 / dt)
-    p = sortperm(omega_full)
-    omega_full, Sfull = omega_full[p], Sfull[p]
-    return onesided ? _onesided(omega_full, Sfull) : (omega_full, Sfull)
-end
-
-"Raw (single-shot) periodogram -- the INCONSISTENT estimator kept ONLY as the
- Unit-1 negative control: its variance does NOT decay with record length at
- fixed omega. Same normalization as welch_psd so the two overlay honestly."
-raw_periodogram(x, dt; onesided = true) =
-    welch_psd(x, dt; nseg = 1, window = :none, onesided = onesided)
-
-"Bochner forward transform of a covariance sequence r = [R(0), R(dt), ...]
- into S(omega): the discrete realization of
- S(omega) = (1/2pi) int e^{-i omega t} R(t) dt   (1.7)."
-function bochner_forward(r, dt; onesided = true)
-    rsym = vcat(r, r[end-1:-1:2])                 # even extension
-    S = real(fft(rsym)) .* (dt / (2pi))
-    omega = 2pi .* fftfreq(length(rsym), 1 / dt)
-    p = sortperm(omega); omega, S = omega[p], S[p]
-    return onesided ? _onesided(omega, S) : (omega, S)
-end
-
-"Bochner inverse: S(omega) -> covariance, the discrete form of
- R(t) = int e^{i omega t} S(omega) dOmega   (1.8)."
-function bochner_inverse(S, dOmega)
-    return real(ifft(S)) .* (length(S) * dOmega)
-end
-
-"Total-variance check: trapezoidal int Shat dOmega, which must approach R(0).
- A result of 2*pi*R(0) instead of R(0) is the signature of a dropped 1/2pi."
-spectral_variance(omega, Shat) =
-    sum(0.5 .* (Shat[1:end-1] .+ Shat[2:end]) .* diff(omega))
-
-end # module
-\end{lstlisting}
-
-\subsection*{\texttt{src/ergodic.jl}}
-\begin{lstlisting}
-module Ergodic
-
-using Statistics
-export running_time_average, time_average_variance, msd_integrated,
-       greenkubo_coefficient
-
-"Running time-average (1/t) int_0^t X_s ds along ONE path, by cumulative
- trapezoidal quadrature on a uniform grid of spacing dt. This is the object
- whose convergence to the mean is the Unit-4 loop-closer."
-function running_time_average(x, dt)
-    n = length(x)
-    integral = zeros(n)
-    acc = 0.0
-    for i in 2:n
-        acc += 0.5 * (x[i] + x[i-1]) * dt          # trapezoid increment
-        integral[i] = acc
-    end
-    t = dt .* (0:n-1)
-    avg = similar(integral)
-    avg[1] = x[1]                                   # t -> 0 limit
-    @. avg[2:end] = integral[2:end] / t[2:end]
-    return avg
-end
-
-"Empirical Var((1/T) int_0^T X_s ds) as a function of horizon T, estimated
- across an ENSEMBLE of length-T paths. One long path gives a single
- realization of the time-average, NOT its variance -- the common trap; hence
- `paths` is a MATRIX (n_grid x M). Returns (T-values, variance estimates)."
-function time_average_variance(paths, dt; horizons)
-    M = size(paths, 2)
-    Tvals = Float64[]; varhat = Float64[]
-    for h in horizons
-        k = round(Int, h / dt)                     # grid index of the horizon
-        avgs = [running_time_average(view(paths, 1:k, m), dt)[end] for m in 1:M]
-        push!(Tvals, (k - 1) * dt)
-        push!(varhat, var(avgs))
-    end
-    return Tvals, varhat
-end
-
-"Mean-square displacement of the integral E( int_0^t X_s ds )^2 across paths;
- for a stationary process it grows ~ 2*Dstar*t (Green-Kubo, (1.14)-(1.15))."
-function msd_integrated(paths, dt)
-    n, M = size(paths)
-    t = dt .* (0:n-1)
-    msd = zeros(n)
-    for m in 1:M
-        acc = 0.0
-        I = zeros(n)
-        for i in 2:n
-            acc += 0.5 * (paths[i, m] + paths[i-1, m]) * dt
-            I[i] = acc
-        end
-        @. msd += I^2
-    end
-    return t, msd ./ M
-end
-
-"Green-Kubo / transport coefficient for the OU kernel:
- Dstar = int_0^inf C = D/alpha^2 (Example 1.18). Distinct from the noise
- strength D unless alpha = 1."
-greenkubo_coefficient(; D = 1.0, alpha = 1.0) = D / alpha^2
-
-end # module
-\end{lstlisting}
-
-\subsection*{\texttt{src/gof.jl}}
-\begin{lstlisting}
-module GOF
-
-export ks_statistic
-
-"Two-sided Kolmogorov-Smirnov distance sup_x |F_n(x) - F(x)| between the
- empirical CDF of `samples` and a target CDF `cdf` (a callable). The sup is
- attained at a sample point, so it suffices to check both one-sided gaps at
- each order statistic: F_n jumps from (i-1)/n to i/n at the i-th one.
-
- Deliberately NOT an operation on the covariance operator -- this is the one
- module that sits outside the src/ organizing principle. It is here, rather
- than duplicated in two run.jl files, because Unit 3 needs it for the
- Cramer-Wold projections and Unit 5 for the Donsker marginal rates, and
- because src/ is the tier that gets a deterministic test."
-function ks_statistic(samples, cdf)
-    n = length(samples)
-    n == 0 && throw(ArgumentError("ks_statistic: empty sample"))
-    xs = sort(samples)
-    d = 0.0
-    for (i, x) in enumerate(xs)
-        Fx = cdf(x)
-        d = max(d, i / n - Fx, Fx - (i - 1) / n)   # both sides of the jump
-    end
-    return d
-end
-
-end # module
-\end{lstlisting}
-
-\subsection*{\texttt{src/sde.jl} (excerpt)}
-\begin{lstlisting}
-module SDE
-
-export euler_maruyama, ou_step, gbm_exact,
-       simulate, brownian_path, coarsen_increments
-
-"One Euler-Maruyama step for dX = a(X) dt + b(X) dW. Sharing dW across
- coarse/fine resolutions is the caller's responsibility (strong-error trap)."
-euler_maruyama(x, a, b, dt, dW) = x + a(x) * dt + b(x) * dW
-
-"OU with ADDITIVE noise: dX = -alpha X dt + sqrt(2D) dW. Stationary law
- N(0, D/alpha), covariance (D/alpha) exp(-alpha|tau|). Additive noise =>
- Euler-Maruyama already has STRONG order 1.0 (Milstein term vanishes), so
- strong and weak orders coincide -- the strong/weak GAP is NOT visible here."
-ou_step(x, dt, dW; D=1.0, alpha=1.0) =
-    euler_maruyama(x, u -> -alpha * u, _ -> sqrt(2D), dt, dW)
-
-"Geometric BM with MULTIPLICATIVE noise: dY = mu Y dt + sigma Y dW.
- Exact solution used as the reference for both strong and weak error;
- multiplicative noise => EM strong order 0.5, weak order 1.0 (the GAP)."
-gbm_exact(Y0, mu, sigma, t, Wt) = Y0 * exp((mu - sigma^2 / 2) * t + sigma * Wt)
-
-"Integrate a path from a step rule and a PRECOMPUTED increment vector dW
- (length nsteps). Passing dW in explicitly is what lets the caller share one
- driving path across resolutions."
-function simulate(step, x0, dt, nsteps, dW::AbstractVector)
-    x = x0; path = Vector{typeof(x0)}(undef, nsteps + 1); path[1] = x0
-    for i in 1:nsteps
-        x = step(x, dt, dW[i]); path[i+1] = x
-    end
-    return path
-end
-
-"A driving Brownian path and its increments on a uniform grid:
- dW ~ N(0, dt), W = cumulative sum. Returns (W, dW)."
-function brownian_path(dt, nsteps, rng)
-    dW = sqrt(dt) .* randn(rng, nsteps)
-    return vcat(0.0, cumsum(dW)), dW
-end
-
-"Coarsen fine increments to a step m times larger by summing each block of m
- (Brownian increments are additive). This is the coupling that makes the
- STRONG error meaningful: the coarse path is driven by the SAME noise as the
- fine one. Using independent draws instead is the Unit-7 negative control."
-coarsen_increments(dW_fine::AbstractVector, m::Integer) =
-    [sum(@view dW_fine[(j-1)*m+1 : j*m]) for j in 1:div(length(dW_fine), m)]
-
-end # module
-\end{lstlisting}
-
-\subsection*{\texttt{test/runtests.jl}}
-\begin{lstlisting}
-using Test, StochProc, StableRNGs
-
-# Assume a grid t_grid, kernels R (nonstationary) and R_stat (stationary),
-# horizon T, grid size n_grid, and an assembled Sigma are defined above.
-
-@testset "Covariance operator basics" begin
-    # symmetry and positive semi-definiteness of the kernel catalogue
-    @test issymmetric(Sigma)
-    @test all(eigvals(Sigma) .>= -1e-10)
-end
-
-@testset "KL trace identity (general): sum(lambda) == tr(C) == int_0^T R(t,t) dt" begin
-    # general form holds for ANY second-order process, stationary or not.
-    # This validates quadrature weights + assembly, NOT the eigensolver.
-    nodes, w = quad_nodes_weights(T; n = n_grid)
-    lambdas, _ = nystrom_eigen(R, nodes, w)
-    trC = trace_diag(R, nodes, w)         # int_0^T R(t,t) dt via the quadrature
-    @test isapprox(sum(lambdas), trC; rtol = 1e-3)
-end
-
-@testset "Trace: stationary specialization (Exercise 23), stationary kernel only" begin
-    # For a STATIONARY kernel R(t,t) == R(0), so tr(C) == T*R(0).
-    # (This does NOT hold for Brownian motion, where R(0,0)=0 but tr(C)=T^2/2.)
-    nodes, w = quad_nodes_weights(T; n = n_grid)
-    lambdas_stat, _ = nystrom_eigen(R_stat, nodes, w)
-    @test isapprox(sum(lambdas_stat), T * R_stat(0.0, 0.0); rtol = 1e-3)
-end
-
-@testset "Brownian motion KL closed form (Example 1.29), resolved range" begin
-    n = 1:10
-    lambda_analytic = T^2 .* (2 ./ ((2n .- 1) .* pi)).^2   # [0,T]: lambda_n prop T^2
-    @test isapprox(lambdas_numeric[1:10], lambda_analytic; rtol = 1e-2)
-    # sanity: sum of analytic eigenvalues == T^2/2 == BM trace (not T*R(0)=0).
-    @test isapprox(sum(lambdas_numeric), T^2 / 2; rtol = 1e-2)
-end
-
-@testset "KS statistic, hand-computed" begin
-    # Uniform(0,1) target, so F(x) = x and the gaps are computable by hand.
-    # samples 0.1, 0.5, 0.9 (n = 3); at the i-th order statistic F_n jumps
-    # from (i-1)/3 to i/3, so both one-sided gaps must be checked:
-    #   i=1, x=0.1:  1/3 - 0.1 = 7/30   |   0.1 - 0   = 3/30
-    #   i=2, x=0.5:  2/3 - 0.5 = 5/30   |   0.5 - 1/3 = 5/30
-    #   i=3, x=0.9:  3/3 - 0.9 = 3/30   |   0.9 - 2/3 = 7/30
-    # sup = 7/30. This symmetric case does NOT discriminate a one-sided
-    # implementation (either gap alone still returns 7/30) -- the two skewed
-    # cases below are the ones that bite, and they must BOTH be kept.
-    @test isapprox(ks_statistic([0.1, 0.5, 0.9], x -> x), 7 / 30; atol = 1e-12)
-    # unsorted input must agree: guards a missing sort.
-    @test isapprox(ks_statistic([0.9, 0.1, 0.5], x -> x), 7 / 30; atol = 1e-12)
-    # bunched left: the UPPER gap attains the sup; a D-minus-only impl gets 0.1.
-    #   i=1, x=0.1: 1/2 - 0.1 = 0.4  | 0.1 - 0   = 0.1
-    #   i=2, x=0.2: 2/2 - 0.2 = 0.8  | 0.2 - 1/2 < 0
-    @test isapprox(ks_statistic([0.1, 0.2], x -> x), 0.8; atol = 1e-12)
-    # bunched right (the mirror): the LOWER gap attains it; a D-plus-only
-    # impl gets 0.1. Together these two pin both sides of the jump.
-    #   i=1, x=0.8: 1/2 - 0.8 < 0    | 0.8 - 0   = 0.8
-    #   i=2, x=0.9: 2/2 - 0.9 = 0.1  | 0.9 - 1/2 = 0.4
-    @test isapprox(ks_statistic([0.8, 0.9], x -> x), 0.8; atol = 1e-12)
-    @test_throws ArgumentError ks_statistic(Float64[], x -> x)
-end
-\end{lstlisting}
+Three failure families recur across units; internalize them once rather than per unit.
+
+\begin{itemize}[leftmargin=1.4cm]
+  \item \emph{The FFT/normalization family} (Units 1, 6, 7): one- vs two-sided spectra; angular
+  ($\omega$) vs ordinary ($f=\omega/2\pi$) frequency, worth a factor $2\pi$; FFTW returns unnormalized
+  transforms (restore $\Delta t$, $1/N$); Welch divides by the window power $\sum_n w_n^2$, not $N$;
+  the circulant-embedding scaling is validated once, in Unit~1. Single guard: pin every normalization
+  so the discrete $\int\widehat S\,d\omega\to R(0)$ and unit-test it.
+  \item \emph{The estimator noise floor} (Units 2, 7, and the raw periodogram of Unit~1): every rate
+  check has a level below which the estimator's own variance or discretization dominates and the slope
+  flattens --- the Nystr\"om eigenvalue floor, the weak-error Monte-Carlo floor, and the inconsistent
+  raw periodogram are the \emph{same} phenomenon. Single guard: identify the floor, fit slopes only
+  above it, and state the resolved range.
+  \item \emph{The strong-convergence coupling} (Unit 7): strong-error checks require the \emph{same}
+  driving Brownian path at coarse and fine steps --- generate the fine path first and subsample it.
+  The un-coupled version is a negative control, not the method.
+\end{itemize}
+
+% =====================================================================
+\section{Budget}
+\label{sec:budget}
+% =====================================================================
+
+At the working budget of $15$\,h/week ($6\times2.5$\,h) against a $6$--$8$ week horizon, i.e.\
+$90$--$120$\,h, the summed per-unit estimates total $\approx 55$--$61$ core hours; the remainder is
+deliberate headroom for per-unit spec-writing and review of all generated code, plus a debugging
+buffer concentrated on the units most likely to overrun for someone newer to stochastic numerics:
+\textbf{Units 1, 2, 6, and 7}. The risk in Units~1, 6, and~7 is spectral/FFT normalization; the risk
+in Unit~2 is the Nystr\"om symmetrization and the eigenvalue noise floor. One further hidden time-sink:
+the Unit-5 marginal-convergence rate is law-dependent, so a fitted slope that is not $n^{-1/2}$ can be
+correct rather than a bug.
+
+Reconciled against shipped reality: \textbf{Units 0--3 are landed}, accounting for roughly $32$--$36$
+of the core hours; the \textbf{remaining} committed work (Units 4--7) is roughly $23$--$25$ hours, so
+the split reconciles with the total rather than merely relabeling it. Everything through Unit~6 is
+firm; the SDE bridge (Unit~7) is the single cut line, with Unit~6 trimmed second, if the buffer is ever
+consumed --- nothing in Units 0--6 depends on Unit~7. This spends the extra budget over a leaner plan
+on \emph{more of Chapter~1 done thoroughly} (the scaling-limit construction, fBm, the truncation-cost
+study, circulant embedding), consistent with the stated priority of depth over breadth.
 
 % =====================================================================
 \section*{Sources}
 \addcontentsline{toc}{section}{Sources}
 % =====================================================================
+
+Call signatures, implementations, and numerical tolerances are \emph{not} recorded in this plan: the
+shipped code under \texttt{src/} is the source of truth for the former, and each feature brief is
+handed to \texttt{plan-and-dispatch}, whose per-commit plans own the contracts and the gate values.
+(The previous revision of this document carried an appendix of illustrative code stubs and per-unit
+signature tables; those were deleted as downstream content that competes with the real source of
+truth.)
+
 \begin{itemize}[leftmargin=1.4cm]
-  \item G.~A.~Pavliotis, \emph{Stochastic Processes and Applications}. The project's copy is the \emph{November 11, 2015 draft}; all section, theorem, and equation numbers cited in this document (Chapter~1, plus \S B.5 and a single Chapter-2 pointer, Example~2.5) refer to that draft and were checked directly against it. Note that its numbering differs from the published Springer edition. In particular, \textbf{Mercer's theorem is stated inline and unnumbered in \S1.5} of this draft (there is no ``Theorem~1.18''; ``Example~1.18'' is the exponential-covariance / diffusion-coefficient example, where $\int_0^\infty C = D/\alpha^2$ is computed explicitly), and the ergodic result appears as \emph{Proposition~1.16} in the statement (its proof header inconsistently reads ``Theorem~1.16'').
-  \item External references, flagged inline where used and not verified against Pavliotis: Grenander \& Szeg\H{o}, \emph{Toeplitz Forms and Their Applications} (asymptotic KL/spectral-density coincidence off the torus); D.~B.~Percival \& A.~T.~Walden, \emph{Spectral Analysis for Physical Applications}, or P.~J.~Brockwell \& R.~A.~Davis, \emph{Time Series: Theory and Methods} (periodogram inconsistency); C.~R.~Dietrich \& G.~N.~Newsam, and A.~T.~A.~Wood \& G.~Chan (circulant embedding of stationary Gaussian fields); P.~E.~Kloeden \& E.~Platen, \emph{Numerical Solution of Stochastic Differential Equations} (Euler--Maruyama/Milstein strong and weak convergence orders, including strong order~1 for additive noise); W.~Feller, \emph{An Introduction to Probability Theory and Its Applications, Vol.~II} (Edgeworth expansion / the skewness-dependent Berry--Esseen rate of Unit~5); I.~Karatzas \& S.~Shreve, \emph{Brownian Motion and Stochastic Calculus}, \S3.3 (white noise as a generalized process); the functional central limit theorem / Donsker's invariance principle with Berry--Esseen (Unit~5); and P.~Billingsley, \emph{Probability and Measure} (the Cram\'er--Wold device) together with any standard nonparametric-statistics reference for the Kolmogorov--Smirnov statistic and its finite-sample critical values (both used for the Unit-3 distributional identities).
+  \item G.~A.~Pavliotis, \emph{Stochastic Processes and Applications}. The project's copy is the
+  \emph{November 11, 2015 draft}; all section, theorem, and equation numbers cited here (Chapter~1,
+  plus \S B.5 and a single Chapter-2 pointer, Example~2.5) refer to that draft and were checked
+  directly against it. Its numbering differs from the published Springer edition. In particular,
+  \textbf{Mercer's theorem is stated inline and unnumbered in \S1.5} (there is no ``Theorem~1.18'';
+  ``Example~1.18'' is the exponential-covariance / diffusion-coefficient example, where
+  $\int_0^\infty C = D/\alpha^2$ is computed explicitly), and the ergodic result appears as
+  \emph{Proposition~1.16} (its proof header inconsistently reads ``Theorem~1.16'').
+  \item External references, flagged inline where used and not verified against Pavliotis: Grenander \&
+  Szeg\H{o}, \emph{Toeplitz Forms and Their Applications} (asymptotic KL/spectral-density coincidence
+  off the torus); D.~B.~Percival \& A.~T.~Walden, \emph{Spectral Analysis for Physical Applications},
+  or P.~J.~Brockwell \& R.~A.~Davis, \emph{Time Series: Theory and Methods} (periodogram
+  inconsistency); C.~R.~Dietrich \& G.~N.~Newsam, and A.~T.~A.~Wood \& G.~Chan (circulant embedding of
+  stationary Gaussian fields); P.~E.~Kloeden \& E.~Platen, \emph{Numerical Solution of Stochastic
+  Differential Equations} (Euler--Maruyama/Milstein strong and weak orders, including strong order~1
+  for additive noise); W.~Feller, \emph{An Introduction to Probability Theory and Its Applications,
+  Vol.~II} (the Edgeworth expansion / skewness-dependent Berry--Esseen rate of Unit~5); the functional
+  central limit theorem / Donsker's invariance principle (Unit~5); and P.~Billingsley,
+  \emph{Probability and Measure} (the Cram\'er--Wold device) together with any standard
+  nonparametric-statistics reference for the Kolmogorov--Smirnov statistic and its finite-sample
+  critical values (both used for the Unit-3 distributional identities).
 \end{itemize}
 
 \end{document}

@@ -1,7 +1,9 @@
 # CLAUDE.md
 
 Guidance for agents working in this repo. For the project's purpose and gallery, see `README.md`.
-For the full design rationale and Unit 0–7 spec, see `docs/plan/pavliotis_ch1_project_plan_3.tex`.
+For the through-line, the Unit 0–7 feature briefs, and the design rationale, see the master plan
+`docs/plan/pavliotis_ch1_project_plan_3.tex` (master-plan altitude: no call signatures or
+tolerances — those live in the code and the per-commit plans).
 
 ## What this is
 
