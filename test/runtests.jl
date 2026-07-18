@@ -576,6 +576,88 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
         end
     end
 
+    @testset "Ergodic — time-average estimators" begin
+        dt = 0.5
+        @testset "cumulative integral & running average on deterministic paths" begin
+            # constant path X ≡ c: the running average is c at every T (incl. the T→0 limit A[1]).
+            path = fill(2.0, 6)
+            A = running_time_average(path, dt)
+            @test A ≈ fill(2.0, 6)
+            @test A[1] == 2.0
+            # linear ramp X_k = t_k: trapezoid is EXACT on a line, so I_k = t_k²/2 and A_k = t_k/2
+            # (hand values, not a re-run of the routine's own formula).
+            n = 8; t = [(k - 1) * dt for k in 1:n]; ramp = collect(t)
+            I = StochasticProcesses.Ergodic._cumulative_integral(ramp, dt)
+            @test I ≈ t .^ 2 ./ 2  atol = 1e-12
+            Ar = running_time_average(ramp, dt)
+            @test Ar[1] == 0.0
+            @test Ar[2:end] ≈ t[2:end] ./ 2  atol = 1e-12
+        end
+
+        @testset "green_kubo: trapezoid hand value and the D/α² asymptote" begin
+            # r = [3,5,1], dt = 1: trapezoid = 5 + (3+1)/2 = 7 (hand value).
+            @test green_kubo([3.0, 5.0, 1.0], 1.0) ≈ 7.0
+            @test green_kubo([2.0], 1.0) == 0.0                       # zero-width domain
+            @test_throws ArgumentError green_kubo(Float64[], 1.0)
+            # OU: D* = ∫₀^∞ (D/α)e^{-αu} du = D/α². With D=1, α=2 ⇒ D* = 0.25, NOT D/α = 0.5.
+            D = 1.0; α = 2.0; dt2 = 0.01; ng = 4000                   # grid to ~40 correlation times
+            rou = [(D / α) * exp(-α * (k * dt2)) for k in 0:ng-1]
+            @test isapprox(green_kubo(rou, dt2), D / α^2; rtol = 1e-3)  # realized ~3.3e-5
+            @test !isapprox(green_kubo(rou, dt2), D / α; rtol = 0.2)    # provably not R(0)=D/α
+        end
+
+        @testset "time_average_variance_exact: Lemma 1.17 hand value & T→0 limit" begin
+            # r = [4,3,9], dt = 1: V[1] = C(0) = 4; V[3] = (a+b)/2 = 3.5 — the (T-u) weight zeroes the
+            # endpoint, so C(2)=9 drops out entirely (a discriminating hand target).
+            V = time_average_variance_exact([4.0, 3.0, 9.0], 1.0)
+            @test V[1] == 4.0
+            @test V[3] ≈ 3.5
+            @test time_average_variance_exact([4.0, 3.0], 1.0)[2] ≈ 4.0   # 2-point prefix ⇒ C(0)
+            @test_throws ArgumentError time_average_variance_exact(Float64[], 1.0)
+        end
+
+        @testset "MSD = t² · time_average_variance (exact algebraic identity)" begin
+            # Non-square n_grid × N fixture (5 × 4) so a transpose cannot hide.
+            P = [ 1.0  -2.0   0.5   3.0;
+                 -1.5   2.0   1.0  -0.5;
+                  0.25 -1.0   2.0   1.0;
+                  2.0   0.5  -1.5   0.0;
+                 -0.5   1.5   0.5   2.0]
+            @test size(P) == (5, 4)
+            tav = time_average_variance(P, dt)
+            msd = mean_square_displacement(P, dt)
+            @test length(tav) == 5 && length(msd) == 5          # length == size(P, 1)
+            t = [(k - 1) * dt for k in 1:5]
+            @test msd ≈ t .^ 2 .* tav  atol = 1e-12             # the two estimators are t²-related
+            @test msd[1] == 0.0                                  # I_1 = 0
+            @test tav[1] ≈ sum(P[1, :] .^ 2) / 4                 # E[X_0²] across the 4 columns
+        end
+
+        @testset "empty-input guards" begin
+            @test_throws ArgumentError running_time_average(Float64[], dt)
+            @test_throws ArgumentError time_average_variance(zeros(0, 0), dt)
+            @test_throws ArgumentError mean_square_displacement(zeros(0, 0), dt)
+        end
+
+        @testset "MC consistency: empirical variance tracks the exact Lemma-1.17 curve" begin
+            # A seeded circulant OU ensemble; time_average_variance must track the exact analytic curve
+            # at interior T. Loose rtol (robust to MC noise at a fixed seed) yet catches a wiring bug
+            # (transpose / wrong divisor land far off). Ties the estimator to the identity in CI.
+            D = 1.0; α = 2.0; dt3 = 0.05; ng = 2048; N = 3000
+            r = [(D / α) * exp(-α * (k * dt3)) for k in 0:ng-1]
+            rng = StableRNG(4242)
+            paths = Matrix{Float64}(undef, ng, N)             # preallocate (avoid O(N²) reduce(hcat))
+            for j in 1:N
+                paths[:, j] = sample_circulant_embedding(r, rng)
+            end
+            tav = time_average_variance(paths, dt3)
+            exact = time_average_variance_exact(r, dt3)
+            for k in (200, 500, 1000, 1500)                      # interior T, above the noise floor
+                @test isapprox(tav[k], exact[k]; rtol = 0.10)     # realized ≤ 0.021 at this seed
+            end
+        end
+    end
+
     @testset "public surface" begin
         # Regression guard on the exported names: catches a dropped `export` or a re-export block that
         # falls out of sync with a submodule.
@@ -585,7 +667,9 @@ using Test, StochasticProcesses, LinearAlgebra, StableRNGs, FFTW
                   :sample_circulant_embedding, :sample_kl, :bochner_forward, :spectral_variance,
                   :spectral_power, :welch_psd, :raw_periodogram,
                   :quad_nodes_weights, :nystrom_eigen, :trace_diag, :kl_tail_energy,
-                  :ks_statistic)
+                  :ks_statistic,
+                  :running_time_average, :time_average_variance, :mean_square_displacement,
+                  :green_kubo, :time_average_variance_exact)
             @test isdefined(StochasticProcesses, f)
         end
     end

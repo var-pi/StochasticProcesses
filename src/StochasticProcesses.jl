@@ -15,6 +15,7 @@ kernel `R(t, s)`. The pieces build up in that spirit:
   - `KL`               — the Mercer/Karhunen–Loève eigenbasis: the second diagonalization.
   - `GOF`              — the one deliberate exception: goodness-of-fit statistics (shared
                           across units, not an operation on the covariance operator).
+  - `Ergodic`          — the ergodic loop: time-average estimators and the Green–Kubo coefficient.
 
 Each `include` below pulls in one submodule and re-exports its public names, so `using
 StochasticProcesses` gives a flat namespace.
@@ -44,5 +45,10 @@ export quad_nodes_weights, nystrom_eigen, trace_diag, kl_tail_energy
 include("gof.jl")
 using .GOF
 export ks_statistic
+
+include("ergodic.jl")
+using .Ergodic
+export running_time_average, time_average_variance, mean_square_displacement,
+       green_kubo, time_average_variance_exact
 
 end # module
