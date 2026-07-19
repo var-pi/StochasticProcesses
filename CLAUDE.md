@@ -14,8 +14,8 @@ result — building a gallery of reproducible stochastic-process demos.
 
 **Current state:** Units 0 (covariance core + Cholesky sampling), 1 (spectral/Bochner: the
 `spectral.jl` core, Welch/raw periodogram estimators, circulant-embedding sampler, and the
-`01_spectral_bochner` experiment), 2 (Karhunen–Loève), and 3 (process zoo / reconciliation) are
-complete. Unit 2 comprises five commits: `periodic_kernel` (torus contrast kernel), the `kl.jl`
+`01_spectral_bochner` experiment), 2 (Karhunen–Loève), 3 (process zoo / reconciliation), and 4
+(ergodicity / loop-closer) are complete. Unit 2 comprises five commits: `periodic_kernel` (torus contrast kernel), the `kl.jl`
 module (symmetrized Nyström eigenproblem), the `sample_kl` KL-truncation sampler, the
 `02_kl_quadrature` experiment, and its READMEs. Unit 3 comprises six commits: `brownian_bridge_kernel`
 (a catalogue kernel), the `gof.jl` module (`ks_statistic` — deliberately the one `src/` module
@@ -23,8 +23,14 @@ that is *not* an operation on the covariance operator; a shared goodness-of-fit 
 the future Unit 5), and the `03_process_zoo` experiment across three phases (route equivalence via a
 split-half bootstrap null; the two-step distributional identities — Gaussianity by construction →
 App. B.5 → Cramér–Wold, plus the KL-coefficient independence check; and the Toeplitz/Szegő
-cross-check against the analytic un-normalized symbol `2π·S`), plus its READMEs. Units 4–7 are
-planned but not yet implemented — do not pre-stub them.
+cross-check against the analytic un-normalized symbol `2π·S`), plus its READMEs. Unit 4 comprises
+four commits: the `ergodic.jl` module (the path-side time-average estimators `running_time_average`,
+`time_average_variance`, `mean_square_displacement`; the Green–Kubo coefficient `green_kubo`
+(`D*=D/α²`); and the exact Lemma-1.17 finite-T variance identity `time_average_variance_exact`), the
+`04_ergodicity` experiment (the variance-vs-T `1/T` slope and its `2D*` constant, gated against
+independent sub-ensemble slope SEs), its non-integrable-`C` control (the falsifier showing
+Prop. 1.16's `L¹` hypothesis is load-bearing), and its READMEs. Units 5–7 are planned but not yet
+implemented — do not pre-stub them.
 
 ## Architecture
 
@@ -48,11 +54,15 @@ The central design decision is a split between a small, tested **library** and a
   - `gof.jl` (`GOF`, Unit 3) — `ks_statistic(samples, cdf)` (KS sup-distance to a target CDF).
     The one module *not* organized as an operation on the covariance operator — a deterministic-
     tested goodness-of-fit utility, shared with Unit 5.
+  - `ergodic.jl` (`Ergodic`, Unit 4) — `running_time_average`, `time_average_variance`,
+    `mean_square_displacement` (path-side time-average estimators over an `n_grid × N` path matrix);
+    `green_kubo` (`D*=∫₀^∞ C = D/α²`); `time_average_variance_exact` (the exact Lemma-1.17 finite-T
+    variance identity, O(n)).
 - `test/runtests.jl` — deterministic analytic identities, tight tolerances; grows by one testset
   per phase. This is what CI runs.
 - `experiments/NN_name/` — the gallery, **one folder per unit**, each with `run.jl`, `README.md`,
   and committed `figures/`. Currently `00_covariance_core/`, `01_spectral_bochner/`,
-  `02_kl_quadrature/` (Unit 2), and `03_process_zoo/` (Unit 3). The
+  `02_kl_quadrature/` (Unit 2), `03_process_zoo/` (Unit 3), and `04_ergodicity/` (Unit 4). The
   `experiments/` folder carries its own committed `Project.toml` + `Manifest.toml` (a shared env
   that `dev`s the package) — run scripts under `--project=experiments`.
 - `docs/plan/` — the master plan (`.tex` source + tracked compiled PDF).
@@ -111,6 +121,6 @@ These are load-bearing for reproducibility; violating one silently corrupts ever
 ## Roadmap (planned units, `experiments/NN_*`)
 
 0 covariance core (done) · 1 spectral/Bochner (done) · 2 Karhunen–Loève (done) ·
-3 process zoo (done) · 4 ergodicity ·
+3 process zoo (done) · 4 ergodicity (done) ·
 5 random-walk → BM · 6 fractional BM · 7 SDE bridge. `src/` accretes modules; existing files are
 not restructured. Do not implement a unit until its phase-plan is being worked.
