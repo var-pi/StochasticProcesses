@@ -140,6 +140,70 @@ end
 hline!(pC, [0.0]; color = :gray, linestyle = :dot, label = "")
 savefig(pC, joinpath(OUTDIR, "running_average_band.png"))
 
-@printf("\nrecorded: seed=%d, D=%.1f, alpha=%.1f, dt=%.3f, n_grid=%d, n_ens=%d, Dstar=%.5f\n",
-        SEED_OU, D, ALPHA, DT, N_GRID, N_ENS, Dstar)
-println(all((gate_a, gate_b)) ? "ALL GATES: PASS" : "ALL GATES: FAIL")
+# ============================================================================
+#  NEGATIVE CONTROL — a non-integrable correlation breaks the ergodic 1/T rate
+# ----------------------------------------------------------------------------
+#  Feed the SAME time_average_variance estimator a synthetic stationary process
+#  with C(u) = (1+u)^{-1/2}: positive-definite by Polya's criterion (even, convex,
+#  decreasing, C(0)=1) so it is a valid covariance and Cholesky-samplable, but
+#  NON-integrable (int_0^inf C = inf), so Prop. 1.16's L^1 hypothesis FAILS and the
+#  time-average variance no longer decays like 1/T. Own seed; Cholesky factored ONCE
+#  (the covariance is fixed) so the ensemble is L*Z on a single StableRNG draw.
+#  Appended after the main block -- it cannot perturb the gate (a)/(b) numbers.
+# ============================================================================
+const SEED_CTRL = 13579
+const N_C       = 4096                # modest grid: Cholesky is O(n^3)
+const DT_C      = 0.1                 # T_max_c = N_C*DT_C ~ 410
+const N_ENS_C   = 2000
+const JITTER    = 1e-10               # Cholesky nugget (reported)
+@assert N_ENS_C % NGROUP == 0
+
+Cnon(u) = 1 / sqrt(1 + u)             # non-integrable, positive-definite (Polya)
+r_c   = [Cnon(k * DT_C) for k in 0:N_C-1]
+Σc    = [r_c[abs(i - j) + 1] for i in 1:N_C, j in 1:N_C]
+Lc    = cholesky(Symmetric(Σc) + JITTER * I).L          # factor ONCE, then draw the ensemble as L*Z
+paths_c = Lc * randn(StableRNG(SEED_CTRL), N_C, N_ENS_C)  # N_C x N_ENS_C, one path per COLUMN
+
+tav_c   = time_average_variance(paths_c, DT_C)
+exact_c = time_average_variance_exact(r_c, DT_C)          # exact Lemma-1.17 curve (finite even for C not in L^1)
+Tg_c    = [(k - 1) * DT_C for k in 1:N_C]
+Tlad_c  = exp.(range(log(20.0), log(Tg_c[end] * 0.95); length = NLADDER))
+idx_c   = unique([argmin(abs.(Tg_c .- T)) for T in Tlad_c])
+Tk_c    = Tg_c[idx_c]
+@assert length(idx_c) >= 3
+
+slope_c,   _ = ols_slope_se(log10.(Tk_c), log10.(tav_c[idx_c]))
+slope_cex, _ = ols_slope_se(log10.(Tk_c), log10.(exact_c[idx_c]))   # exact-curve slope (deterministic)
+gc = div(N_ENS_C, NGROUP)
+gsl_c = [ols_slope_se(log10.(Tk_c),
+           log10.(time_average_variance(view(paths_c, :, (m-1)*gc+1:m*gc), DT_C)[idx_c]))[1]
+         for m in 1:NGROUP]
+ḡc   = sum(gsl_c) / NGROUP
+se_c = sqrt(sum(abs2, gsl_c .- ḡc) / (NGROUP - 1)) / sqrt(NGROUP)
+
+# GATE (c): the falsifier. (c1) the MC slope tracks the EXACT finite-T Lemma-1.17 slope for this
+# non-integrable C; (c2) that slope is clearly shallower than -1 (the rate an integrable C gives) --
+# so Prop. 1.16's L^1 hypothesis is load-bearing. The finite-T slope sits ABOVE -1/2 (the -4/T
+# correction makes the local slope ~ -1/2 + 0.75/sqrt(T)); reaching -1/2 would need T_max in the
+# thousands, which the O(n^3) Cholesky control cannot afford -- so we gate the tracking, not -1/2.
+gate_c1 = abs(slope_c - slope_cex) < 2.5 * se_c
+gate_c2 = slope_c > -0.75
+gate_c  = gate_c1 && gate_c2
+@printf("CONTROL slope: MC %.4f  exact %.4f;  |MC-exact| = %.4f  vs  2.5*SE = %.4f  (c1 %s);  slope > -0.75 (c2 %s; -1 would be FALSE) -> %s\n",
+        slope_c, slope_cex, abs(slope_c - slope_cex), 2.5 * se_c,
+        gate_c1 ? "PASS" : "FAIL", gate_c2 ? "PASS" : "FAIL", gate_c ? "PASS" : "FAIL")
+
+# (D) nonintegrable_control.png: MC + exact curve, with -1/2 and (falsified) -1 reference slopes.
+maskc = Tg_c .>= 1.0
+i0 = findfirst(maskc); T0 = Tg_c[i0]; a0 = exact_c[i0]
+pD = plot(Tg_c[maskc], tav_c[maskc]; xscale = :log10, yscale = :log10, label = "MC Var(A_T)",
+          xlabel = "T", ylabel = "Var((1/T) int_0^T X)", alpha = 0.6,
+          title = @sprintf("Non-integrable control: slope %.3f (not -1)", slope_c))
+plot!(pD, Tg_c[maskc], exact_c[maskc]; label = "exact Lemma 1.17", linewidth = 2)
+plot!(pD, Tg_c[maskc], a0 .* (Tg_c[maskc] ./ T0) .^ (-0.5); linestyle = :dash, label = "slope -1/2 (asymptotic)")
+plot!(pD, Tg_c[maskc], a0 .* (Tg_c[maskc] ./ T0) .^ (-1.0); linestyle = :dot,  label = "slope -1 (integrable, falsified)")
+savefig(pD, joinpath(OUTDIR, "nonintegrable_control.png"))
+
+@printf("\nrecorded: seed=%d, D=%.1f, alpha=%.1f, dt=%.3f, n_grid=%d, n_ens=%d, Dstar=%.5f | control: seed=%d, n_c=%d, dt_c=%.2f, n_ens_c=%d, jitter=%.1e\n",
+        SEED_OU, D, ALPHA, DT, N_GRID, N_ENS, Dstar, SEED_CTRL, N_C, DT_C, N_ENS_C, JITTER)
+println(all((gate_a, gate_b, gate_c)) ? "ALL GATES: PASS" : "ALL GATES: FAIL")
