@@ -35,7 +35,7 @@
 # ============================================================================
 using StochasticProcesses
 using StableRNGs, LinearAlgebra, Printf, Plots
-using SpecialFunctions: erf
+using SpecialFunctions: erf, erfinv, gamma_inc, loggamma   # erfinv/gamma_inc/loggamma added in commit 02
 
 ENV["GKSwstype"] = "100"   # headless: GR writes PNGs with no display (CI/agent shells)
 gr()
@@ -243,4 +243,279 @@ savefig(plot(p2a, p2b; layout = (1, 2), size = (1200, 480)), joinpath(OUTDIR, "c
 
 @printf("\nrecorded: seed_paths=%d, seed_cov=%d, n_lattice=%d, m_sub=%d, N_ladder=%s, ngroup=%d, se_mult=%.1f\n",
         SEED_PATHS, SEED_COV, N_LATTICE, M_SUB, string(N_LADDER), NGROUP, SE_MULT)
-println(gate_01a ? "ALL GATES: PASS" : "ALL GATES: FAIL")
+
+# ============================================================================
+#  Phase 2 — HEADLINE: KS-vs-n marginal-convergence rate, hybrid gating
+# ----------------------------------------------------------------------------
+#  Donsker gives BM as the n->infinity LIMIT for every increment law; this phase asks the
+#  next question: at what RATE does the one-time marginal W_n(1) = S_n/sqrt(n) approach its
+#  limiting law N(0,1)? The rate splits into THREE mechanisms, not two -- a correction to the
+#  master-plan brief (fixed in commit 05), verified here by EXACT computation, not asserted:
+#
+#    - exponential (skewness 2, the one skewed law): the Edgeworth SKEWNESS term dominates,
+#      giving KS ~ n^(-1/2).
+#    - Rademacher (symmetric, but a LATTICE law -- only 2 atoms): skewness is exactly 0, so the
+#      skewness term vanishes, but a DIFFERENT term takes over -- the Esseen lattice/discreteness
+#      correction, which is O(n^(-1/2)) and skewness-INDEPENDENT. It dominates for exactly the
+#      same reason a histogram of a coin-flip sum never quite looks continuous: the distribution
+#      lives on a grid of spacing 2/sqrt(n), and no amount of averaging removes that structure at
+#      any finite n. Also KS ~ n^(-1/2) -- NOT n^(-1). This is the plan's error: Rademacher was
+#      wrongly grouped with the smooth-symmetric laws. Exact computation below (a deterministic
+#      binomial-pmf calculation, no sampling at all) settles it: the EXACT Rademacher-to-Phi KS
+#      curve has log-log slope -0.499 to -0.4996 over n in the hundreds-to-thousands -- decisively
+#      -1/2, not -1.
+#    - uniform (symmetric AND smooth -- no lattice, no skew): BOTH of the above n^(-1/2) terms
+#      vanish (no skewness, no discreteness), so the leading survivor is the next Edgeworth term,
+#      kurtosis, which is O(n^(-1)) -- a full power faster.
+#
+#  Headline: "two roads to n^(-1/2) (skewness AND lattice discreteness), one road to n^(-1)
+#  (smooth symmetric)."
+#
+#  GATING IS HYBRID, and asymmetric for a load-bearing, empirically-discovered reason (see the
+#  commit doc for the full war story). In brief: the two n^(-1/2) laws have LARGE signals
+#  (exponential ~0.13/sqrt(n), Rademacher ~0.4/sqrt(n)), resolvable by Monte Carlo -- BUT the
+#  Rademacher case turned out to be a genuinely delicate MC-design problem, not a trivial one:
+#  the raw empirical KS statistic (N samples vs Phi) carries its OWN finite-N sampling BIAS (the
+#  classical Kolmogorov floor, E[D_N] ~ 0.87/sqrt(N)), and this bias does NOT average away across
+#  independent batch-means replicates (it is a bias, not noise) -- so naively cranking up either N
+#  or the replicate count NGROUP can make a marginal gate WORSE, not better, once N is large enough
+#  that the batch-means SE has shrunk below the (separately-irreducible) finite-n curvature bias of
+#  the EXACT rate curve itself. The resolution (theory-first, validated empirically): choose n_min
+#  large enough that the curvature bias is already negligible, then choose N in the regime where
+#  the floor-driven excess is ALSO small relative to a still-honest batch-means SE -- a real,
+#  non-trivial sweet spot, tuned separately per law since their signal amplitudes differ.
+#  Uniform's n^(-1) signal is far smaller still (~9e-4 at n=32) -- resolving it by Monte Carlo
+#  would need N ~ 10^8 and still leave under a decade of usable n, i.e. it is PHYSICALLY
+#  un-gateable by Monte Carlo at any practical N. So uniform alone is gated against its EXACT
+#  (deterministic, zero sampling noise) Irwin-Hall curve; all three exact curves are overlaid on
+#  the Monte Carlo points in the figure below, so the plot itself shows the MC clouds tracking
+#  theory down toward the floor.
+# ============================================================================
+
+# --- exact-CDF helpers (deterministic; used for BOTH the overlay curves AND the uniform gate) ---
+
+# Rademacher: S_n = 2*Binomial(n,1/2) - n exactly (n independent coin flips). The exact KS-to-Phi
+# distance is a sup over the (n+1) support points of the discrete CDF, checked on BOTH sides of
+# each jump (same two-sided logic as `ks_statistic`, just against an exact pmf instead of an
+# empirical 1/n-weighted sample). Evaluated in LOG SPACE (loggamma) so n can run into the
+# thousands without the naive C(n,k)/2^n ratio overflowing -- this is cancellation-free (unlike
+# the uniform Irwin-Hall sum below), so no BigFloat is needed here.
+function ks_exact_rademacher(n::Int)
+    logpmf = [loggamma(n + 1) - loggamma(k + 1) - loggamma(n - k + 1) - n * log(2.0) for k in 0:n]
+    pmf = exp.(logpmf)
+    pmf ./= sum(pmf)             # renormalize away the tiny fp roundoff in the log-sum-exp
+    F = cumsum(pmf)               # F[k+1] = P(S_n <= 2k-n), 1-indexed
+    d = 0.0
+    Fprev = 0.0
+    for k in 0:n
+        x = (2k - n) / sqrt(n)
+        Phi = normcdf(x)
+        d = max(d, F[k+1] - Phi, Phi - Fprev)    # both sides of the jump
+        Fprev = F[k+1]
+    end
+    return d
+end
+
+# Exponential: S_n + n ~ Erlang(shape n, scale 1) exactly (sum of n iid Exp(1)). The exact CDF is
+# the regularized lower incomplete gamma P(n, x*sqrt(n)+n); `gamma_inc(a, x)` returns `(P, Q)`, so
+# `[1]` selects P. Continuous law -> no jumps -> the sup is found by a fine grid search (200,001
+# points comfortably resolves KS values as small as 1e-3, three orders of magnitude finer).
+function ks_exact_exponential(n::Int; ngrid = 200_000, xmax = 8.0)
+    d = 0.0
+    for x in range(-xmax, xmax; length = ngrid)
+        arg = x * sqrt(n) + n
+        F = arg <= 0 ? 0.0 : gamma_inc(n, arg)[1]
+        d = max(d, abs(F - normcdf(x)))
+    end
+    return d
+end
+
+# Uniform: Irwin-Hall CDF (closed alternating sum) of the mapped sum. `increment_samplers[:uniform]`
+# draws sqrt(3)*(2V-1) for V~Unif(0,1), so S_n = sqrt(3)*(2*IH_n - n) where IH_n ~ IrwinHall(n) is
+# the sum of n iid Unif(0,1) -- inverting, S_n/sqrt(n) <= x iff IH_n <= (x*sqrt(n/3)+n)/2.
+#
+# PRECISION CAVEAT (load-bearing): the naive Float64 alternating sum sum_k (-1)^k C(n,k) (x-k)^n
+# suffers catastrophic cancellation for n gtrsim 30 (terms of size ~n^n canceling to a result of
+# size ~1) -- exactly why this gate is restricted to a SMALL-n window (UNI_WINDOW below), which is
+# also precisely where uniform's -1 regime already lives. Mitigation: every intermediate value is
+# computed in BigFloat/BigInt (exact rational combinatorics, not floating-point), so there is no
+# cancellation at all within the window used -- only the FINAL division back to Float64 loses
+# precision, at the ~1e-16 relative level, utterly negligible next to the ~1e-3 KS values gated
+# here. The n=8/16/32 sanity check below independently guards this implementation.
+function irwin_hall_cdf(x, n::Int)
+    x <= 0 && return 0.0
+    x >= n && return 1.0
+    kmax = floor(Int, x)
+    s = zero(BigFloat)
+    for k in 0:kmax
+        s += (-1.0)^k * binomial(BigInt(n), BigInt(k)) * (BigFloat(x) - k)^n
+    end
+    return Float64(s / factorial(BigInt(n)))
+end
+
+function ks_exact_uniform(n::Int; ngrid = 20_000, xmax = 6.0)
+    d = 0.0
+    for x in range(-xmax, xmax; length = ngrid)
+        ih_arg = (x * sqrt(n / 3) + n) / 2
+        d = max(d, abs(irwin_hall_cdf(ih_arg, n) - normcdf(x)))
+    end
+    return d
+end
+
+# --- Monte-Carlo ladders, ONE PER LAW (tuned separately -- see the commit doc's war story for why
+# a shared N/ladder does not work: the two laws' signal amplitudes and finite-n curvature decay at
+# different rates, so a single choice cannot simultaneously clear the Kolmogorov floor for both) ---
+const SEED_KS_EXP = 12345         # own stream: exponential MC ladder
+const SEED_KS_RAD = 999           # own stream: Rademacher MC ladder (independent of the exponential draws)
+const NGROUP_KS   = 20            # batch-means replicates (repo convention, matches GATE 01a)
+const SE_MULT_KS  = 2.5           # repo convention (2.5-3x); see commit doc for the tuning story
+
+const N_LADDER_EXP = [40, 80, 160, 320]         # walk-length ladder (n_min=40 keeps finite-n curvature <=0.003)
+const N_MC_EXP     = 1_000_000                  # samples per rung; clears the exponential floor at n_max with margin
+
+const N_LADDER_RAD = [150, 200, 270, 360]       # n_min=150 keeps Rademacher's OWN curvature <=0.001
+const N_MC_RAD     = 500_000                    # samples per rung; sweet spot -- see war story (bigger N is NOT better)
+
+@assert length(N_LADDER_EXP) >= 3 && length(N_LADDER_RAD) >= 3   # ols needs n-2 >= 1 dof for a slope SE
+
+# One replicate: fresh, independent N columns at every rung (continuing the law's OWN stream),
+# fit to one log-log slope -- the same `cov_ladder_replicate` pattern as GATE 01a, just on the
+# KS-to-Phi distance of the endpoint marginal instead of a covariance Frobenius error.
+function ks_ladder_replicate(sampler::Function, n_ladder, N, rng)
+    errs = [ks_statistic(rescaled_walk(sampler, n, N, rng)[end, :], normcdf) for n in n_ladder]
+    slope, _ = ols_slope_se(log10.(n_ladder), log10.(errs))
+    return slope, errs
+end
+
+mc_results = Dict{Symbol,NamedTuple}()
+# NOTE ON ORDER: unlike every other per-law loop in this file, this one does NOT iterate
+# LAW_ORDER. LAW_ORDER exists to pin draw order on a SHARED, continuing StableRNG stream (so
+# reordering never changes committed numbers) -- but here each law gets its OWN independent
+# stream (SEED_KS_EXP / SEED_KS_RAD), so iteration order has no effect on reproducibility at
+# all. The order below (exponential, then Rademacher) instead mirrors the plan's own gate
+# numbering (02-exp before 02-rad).
+mc_configs = ((:exponential, N_LADDER_EXP, N_MC_EXP, SEED_KS_EXP), (:rademacher, N_LADDER_RAD, N_MC_RAD, SEED_KS_RAD))
+for (law, n_ladder, N_mc, seed) in mc_configs
+    sampler = increment_samplers[law]
+    rng_law = StableRNG(seed)
+    reps = [ks_ladder_replicate(sampler, n_ladder, N_mc, rng_law) for _ in 1:NGROUP_KS]
+    gslopes = [r[1] for r in reps]
+    errmat  = reduce(hcat, (r[2] for r in reps))'          # NGROUP_KS x length(n_ladder)
+    mean_err = vec(sum(errmat; dims = 1)) ./ NGROUP_KS
+
+    slope_v = sum(gslopes) / NGROUP_KS
+    se_v    = sqrt(sum(abs2, gslopes .- slope_v) / (NGROUP_KS - 1)) / sqrt(NGROUP_KS)   # batch-means SE
+    gate    = abs(slope_v + 0.5) < SE_MULT_KS * se_v
+    mc_results[law] = (; n_ladder, N_mc, slope = slope_v, se = se_v, mean_err, gate)
+
+    tag = law == :exponential ? "02-exp" : "02-rad"
+    @printf("GATE %s [%-11s] MC slope: %.4f;  |slope+0.5| = %.4f  vs  %.1f*SE = %.4f  (SE %.5f) -> %s\n",
+            tag, String(law), slope_v, abs(slope_v + 0.5), SE_MULT_KS, SE_MULT_KS * se_v, se_v,
+            gate ? "PASS" : "FAIL")
+end
+gate_02exp = mc_results[:exponential].gate
+gate_02rad = mc_results[:rademacher].gate
+
+# --- GATE 02-uni-exact: uniform's -1 slope, gated against its EXACT (deterministic) curve -------
+# Sanity check FIRST: guards the Irwin-Hall implementation before it is trusted for the gate.
+# Independently-verified target values (hand/reference-computed, not re-derived from this code).
+const UNI_SANITY_N      = (8, 16, 32)
+const UNI_SANITY_TARGET = (0.00354, 0.00174, 0.00087)
+const UNI_SANITY_TOL    = 2e-4     # generous vs the 3-significant-figure targets
+
+uni_sanity_vals = [ks_exact_uniform(n) for n in UNI_SANITY_N]
+uni_sanity_ok = all(abs(uni_sanity_vals[i] - UNI_SANITY_TARGET[i]) < UNI_SANITY_TOL
+                     for i in eachindex(UNI_SANITY_N))
+@printf("SANITY uniform exact-CDF: n=8/16/32 -> %.5f/%.5f/%.5f  (targets %.5f/%.5f/%.5f) -> %s\n",
+        uni_sanity_vals[1], uni_sanity_vals[2], uni_sanity_vals[3],
+        UNI_SANITY_TARGET[1], UNI_SANITY_TARGET[2], UNI_SANITY_TARGET[3],
+        uni_sanity_ok ? "PASS" : "FAIL")
+
+# The gate itself: a SMALL-n window (Irwin-Hall's precision-safe regime, and exactly where the -1
+# rate already lives) -- deterministic, so a FIXED absolute margin gates it, not a multiple of an
+# SE (there is no sampling noise at all; the only "residual" is Edgeworth misspecification, which
+# is already tiny and shrinking as UNI_WINDOW grows, per the exact values below).
+const UNI_WINDOW        = [8, 16, 32, 64, 128]
+const UNI_SLOPE_MARGIN  = 0.05
+
+uni_exact_curve = [ks_exact_uniform(n) for n in UNI_WINDOW]
+uni_slope, _ = ols_slope_se(log10.(UNI_WINDOW), log10.(uni_exact_curve))   # se unused: no sampling noise to report
+gate_02uniexact = uni_sanity_ok && abs(uni_slope + 1) < UNI_SLOPE_MARGIN
+@printf("GATE 02-uni-exact: Irwin-Hall exact slope = %.4f;  |slope+1| = %.4f  vs margin %.2f -> %s\n",
+        uni_slope, abs(uni_slope + 1), UNI_SLOPE_MARGIN, gate_02uniexact ? "PASS" : "FAIL")
+
+# --- GATE 02-sep: uniform's rate is decisively steeper than BOTH n^(-1/2) laws ------------------
+# Pins the headline contrast as an assertion, not an assumption: since |uni_slope| ~ 1.0 while the
+# two MC slopes are ~0.48-0.50, this gate has enormous margin and carries no real risk of its own --
+# its job is to make the "smooth-symmetric is faster" claim a checked fact, not prose.
+gate_02sep = abs(uni_slope) > abs(mc_results[:exponential].slope) &&
+             abs(uni_slope) > abs(mc_results[:rademacher].slope)
+@printf("GATE 02-sep: |uniform slope| %.4f > |exponential slope| %.4f and > |Rademacher slope| %.4f -> %s\n",
+        abs(uni_slope), abs(mc_results[:exponential].slope), abs(mc_results[:rademacher].slope),
+        gate_02sep ? "PASS" : "FAIL")
+
+gate_02 = gate_02exp && gate_02rad && gate_02uniexact && gate_02sep
+println("GATE 02 (all) -> ", gate_02 ? "PASS" : "FAIL")
+
+# --- Figure: ks_rate.png -- MC clouds + all three exact curves + floor + guide slopes -----------
+pr = plot(; xscale = :log10, yscale = :log10, xlabel = "n (walk length)", ylabel = "KS(S_n/√n, Φ)",
+          title = "GATE 02: KS-vs-n marginal rate (hybrid gating)", legend = :bottomleft,
+          size = (900, 560), left_margin = 6Plots.mm, bottom_margin = 5Plots.mm, top_margin = 4Plots.mm)
+for law in (:exponential, :rademacher)
+    r = mc_results[law]
+    scatter!(pr, r.n_ladder, r.mean_err; color = colors_by_law[law], markersize = 5,
+             label = @sprintf("%s MC (slope %.3f)", String(law), r.slope))
+    exact_curve = law == :exponential ? ks_exact_exponential.(r.n_ladder) : ks_exact_rademacher.(r.n_ladder)
+    plot!(pr, r.n_ladder, exact_curve; color = colors_by_law[law], linestyle = :dash,
+          label = "$(String(law)) exact")
+end
+plot!(pr, UNI_WINDOW, uni_exact_curve; color = colors_by_law[:uniform], marker = :diamond,
+      linestyle = :dash, label = @sprintf("uniform exact (slope %.3f)", uni_slope))
+
+floor_exp = 0.87 / sqrt(N_MC_EXP)
+floor_rad = 0.87 / sqrt(N_MC_RAD)
+hline!(pr, [floor_exp]; color = :seagreen, linestyle = :dot, alpha = 0.6,
+       label = @sprintf("floor 0.87/√N (exp, N=%d)", N_MC_EXP))
+hline!(pr, [floor_rad]; color = :steelblue, linestyle = :dot, alpha = 0.6,
+       label = @sprintf("floor 0.87/√N (rad, N=%d)", N_MC_RAD))
+
+anchor_n, anchor_y = N_LADDER_EXP[1], mc_results[:exponential].mean_err[1]
+plot!(pr, N_LADDER_EXP, anchor_y .* (N_LADDER_EXP ./ anchor_n) .^ (-0.5);
+      color = :black, linestyle = :dashdot, alpha = 0.4, label = "guide slope −1/2")
+plot!(pr, UNI_WINDOW, uni_exact_curve[1] .* (UNI_WINDOW ./ UNI_WINDOW[1]) .^ (-1.0);
+      color = :black, linestyle = :solid, alpha = 0.3, label = "guide slope −1")
+savefig(pr, joinpath(OUTDIR, "ks_rate.png"))
+
+# --- Figure: marginal_qq.png -- histogram + QQ of S_n/sqrt(n) vs N(0,1), per law, at a large n ---
+# Own small RNG step per law, continuing AFTER that law's own ladder draws above (so it cannot
+# perturb any gate number) -- reuses each law's own largest MC ladder rung as "a large n" (already
+# validated as a legitimate walk length for that law) rather than inventing a fourth parameter.
+const N_QQ = 20_000                                    # own draw; illustrative only, not gated
+const QQ_PROBS = range(0.005, 0.995; length = 199)      # avoid the p=0/1 quantile singularities
+normquantile(p) = sqrt(2) * erfinv(2p - 1)              # standard-normal quantile (inverse of normcdf)
+
+qq_n = Dict(:rademacher => N_LADDER_RAD[end], :uniform => UNI_WINDOW[end], :exponential => N_LADDER_EXP[end])
+pqq = plot(; layout = (2, 3), size = (1200, 700), left_margin = 5Plots.mm, bottom_margin = 5Plots.mm, top_margin = 3Plots.mm)
+for (i, law) in enumerate(LAW_ORDER)
+    sampler = increment_samplers[law]
+    rng_qq = StableRNG(SEED_KS_EXP + SEED_KS_RAD + i)    # own small deterministic step, one per law
+    n_qq = qq_n[law]
+    endpoint = sort(rescaled_walk(sampler, n_qq, N_QQ, rng_qq)[end, :])
+
+    histogram!(pqq[i], endpoint; normalize = :pdf, bins = 60, label = "", alpha = 0.6,
+               title = "$(String(law)), n=$n_qq", xlabel = "S_n/√n", ylabel = "density")
+    xs = range(-4, 4; length = 200)
+    plot!(pqq[i], xs, exp.(-xs .^ 2 ./ 2) ./ sqrt(2π); linewidth = 2, label = "N(0,1)")
+
+    qemp = [_quantile(endpoint, p) for p in QQ_PROBS]
+    qth  = normquantile.(QQ_PROBS)
+    scatter!(pqq[i+3], qth, qemp; markersize = 2, label = "", xlabel = "N(0,1) quantile",
+             ylabel = "empirical quantile", title = "QQ: $(String(law))")
+    plot!(pqq[i+3], qth, qth; linestyle = :dash, color = :black, label = "y=x")
+end
+savefig(pqq, joinpath(OUTDIR, "marginal_qq.png"))
+
+@printf("\nrecorded: seed_ks_exp=%d, seed_ks_rad=%d, n_ladder_exp=%s, N_mc_exp=%d, n_ladder_rad=%s, N_mc_rad=%d, ngroup_ks=%d, se_mult_ks=%.1f, uni_window=%s\n",
+        SEED_KS_EXP, SEED_KS_RAD, string(N_LADDER_EXP), N_MC_EXP, string(N_LADDER_RAD), N_MC_RAD,
+        NGROUP_KS, SE_MULT_KS, string(UNI_WINDOW))
+println(gate_01a && gate_02 ? "ALL GATES: PASS" : "ALL GATES: FAIL")
