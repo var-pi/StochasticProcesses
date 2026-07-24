@@ -518,4 +518,143 @@ savefig(pqq, joinpath(OUTDIR, "marginal_qq.png"))
 @printf("\nrecorded: seed_ks_exp=%d, seed_ks_rad=%d, n_ladder_exp=%s, N_mc_exp=%d, n_ladder_rad=%s, N_mc_rad=%d, ngroup_ks=%d, se_mult_ks=%.1f, uni_window=%s\n",
         SEED_KS_EXP, SEED_KS_RAD, string(N_LADDER_EXP), N_MC_EXP, string(N_LADDER_RAD), N_MC_RAD,
         NGROUP_KS, SE_MULT_KS, string(UNI_WINDOW))
-println(gate_01a && gate_02 ? "ALL GATES: PASS" : "ALL GATES: FAIL")
+
+# ============================================================================
+#  Phase 3 — path functional: running maximum -> half-normal (reflection principle)
+# ----------------------------------------------------------------------------
+#  Donsker's theorem is a statement about the WHOLE path, not just its one-time marginal -- so a
+#  functional that depends on the path's shape, not just its endpoint, should also converge. The
+#  running maximum M^(n) = sup_[0,1] W_n is the natural next check: by the reflection principle,
+#  sup_[0,1] B =_d |B_1| =_d |N(0,1)|, whose CDF is the HALF-NORMAL F(x) = 2*Phi(x) - 1 (x >= 0).
+#
+#  Running max is EXACT on the lattice: linear interpolation between lattice points never exceeds
+#  the larger endpoint (the interpolated segment is a straight line, so its max is attained at one
+#  of its ends), so `vec(maximum(W; dims=1))` over the (n+1)-row lattice IS the true continuous-
+#  path supremum -- no fine grid or extra interpolation needed, unlike a functional that could hide
+#  excursions BETWEEN lattice points.
+#
+#  GATING IS A CONSISTENCY CHECK, not a rate -- the opposite regime from Phase 2. Phase 2 wanted
+#  the KS-vs-n curve to clear the Kolmogorov SAMPLING floor from ABOVE (a resolvable MC signal
+#  against sampling noise). Here the claim is different: "at one large, fixed n, the running-max
+#  law already looks like the half-normal, not merely 'some limit'" -- gated against a PRINCIPLED
+#  ABSOLUTE BOUND (MAX_KS_BOUND) sized to the functional's OWN deterministic finite-n deviation
+#  (~c/sqrt(n), the running-max analogue of Phase 2's Edgeworth terms -- NOT sampling noise, and
+#  several times larger than the Kolmogorov floor at these N (empirically ~4-6x); an earlier
+#  version of this gate conflated the two and failed for all three laws at first pass -- see the
+#  commit doc), paired with a WRONG-TARGET control (KS against the full normal Phi, which the
+#  half-normal is emphatically not: Phi(0)=0.5 while the half-normal's CDF is 0 at x=0, so their
+#  sup-distance is close to 0.5 analytically, independent of n or sampling) -- this closes the
+#  loophole where "KS is small" could mean "converged to SOME garbage law that happens to be close
+#  to both," rather than specifically the half-normal.
+#
+#  n is sized INDEPENDENTLY PER LAW, not shared. Rademacher's running max is LATTICE-VALUED (only
+#  n+1 possible values), so KS(M, half-normal) carries the SAME O(n^-1/2) discreteness term seen in
+#  Phase 2's Rademacher marginal (~0.4/sqrt(n)) ON TOP of the shared c/sqrt(n) deviation -- it still
+#  converges, but needs a somewhat larger n than the two continuous laws (uniform, exponential) for
+#  its true deviation to land under the same MAX_KS_BOUND. Sizing all three laws' n identically
+#  would either waste budget on the continuous laws or leave Rademacher short -- so N_STEPS_MAX is a
+#  per-law Dict, not a single scalar. (Pushing n into the many thousands to instead chase the
+#  SAMPLING floor down is deliberately avoided -- for Rademacher that costs a multi-GB lattice
+#  matrix for no added rigor, since the discrimination against the wrong target is already decisive
+#  by a wide margin at the modest n used here.)
+# ============================================================================
+
+# Half-normal CDF: the reflection-principle law of sup_[0,1] B = |B_1| =_d |N(0,1)|. Zero for
+# x < 0 (the running max of a path started at 0 is never negative in the LIMIT; finite-n paths are
+# lattice/discrete but their max is >= 0 by construction too, since S_0 = 0 is always in the max).
+halfnormcdf(x) = x >= 0 ? 2 * normcdf(x) - 1 : 0.0
+
+const SEED_MAX = 20260724   # GATE 03 running-max MC (own stream, threaded across LAW_ORDER)
+
+# Per-law walk length n -- consistency regime (one large fixed n, not a ladder). Uniform and
+# exponential are continuous laws with no lattice term, but the running-max functional itself
+# converges to the half-normal at its OWN genuine finite-n rate ~ c/sqrt(n) (an Edgeworth-type
+# deviation from the reflection-principle limit, not sampling noise -- see MAX_KS_BOUND below).
+# Rademacher's max is additionally lattice-valued, adding its familiar O(n^-1/2) discreteness term
+# (~0.4/sqrt(n)) on top -- it needs a somewhat larger n than the continuous laws for its true
+# deviation to land in the same ballpark; do not size all three laws' n identically.
+const N_STEPS_MAX = Dict(:rademacher => 3_000, :uniform => 1_200, :exponential => 1_200)
+
+# Per-law sample count N. Not tuned for a tiny sampling floor (unlike Phase 2) -- MAX_KS_BOUND below
+# budgets the c/sqrt(n) DETERMINISTIC deviation, which dominates the KS distance at these n by an
+# order of magnitude over any N in this range, so N only needs to be "large enough that single-draw
+# sampling noise is a minor contributor," not "as large as memory allows." Kept modest so
+# `rescaled_walk`'s materialized (n+1) x N lattice stays a few hundred MB even for Rademacher.
+const N_MC_MAX = Dict(:rademacher => 30_000, :uniform => 50_000, :exponential => 50_000)
+
+# --- GATE 03 THRESHOLDS -----------------------------------------------------
+# MIS-DESIGN CORRECTED (see docs/commits/05-bm-scaling-limit/03-running-max.md for the full story):
+# an earlier version of this gate budgeted `floor(N) + margin`, i.e. only the finite-N SAMPLING
+# floor (the classical Kolmogorov E[D_N] ~ 0.87/sqrt(N)) -- but KS(M, half-normal) at finite n is
+# NOT ~0 plus sampling noise. It is a genuine, deterministic convergence deviation of size ~c/sqrt(n)
+# (the running max is itself only a finite-sample approximation to sup_[0,1] B, exactly like the
+# Edgeworth corrections in Phase 2's marginal rate) -- empirically ~0.017-0.024 at the n used below,
+# several times larger than the sampling floor at these N (~4-6x). Conflating the two regimes (an
+# exact rate-scale quantity vs. a fixed absolute margin) first surfaced with a much smaller n
+# (uniform/exponential at n=300): there, the true deviation (~0.033-0.046) came in 2.5-3.6x over a
+# floor(N)+margin threshold of ~0.013-0.015, and every law failed. The fix: gate against a single
+# PRINCIPLED ABSOLUTE BOUND sized to that deterministic deviation at the chosen n, not the sampling
+# floor. This is deliberately NOT "floor + margin" -- there is no meaningful floor-shrinking effect
+# to chase here (see the comment on N_MC_MAX above), so folding one in would just reintroduce the
+# same conflation.
+const MAX_KS_BOUND  = 0.05   # correct-target bound: budgets the ~c/sqrt(n) finite-n deviation at
+                              # the n above (empirically ~0.017 for uniform, ~0.024 for exponential
+                              # at n=1200, ~0.018 for Rademacher at n=3000) with real margin -- a FAIL
+                              # here means a genuine mis-scaled or wrongly-shaped max, not noise.
+const MAX_WRONG_MIN = 0.3    # wrong-target control threshold: KS(M, Phi) must clear this. The
+                              # analytic sup|halfnormcdf - normcdf| approaches 0.5 (achieved as x ->
+                              # 0^-: normcdf(0) = 0.5, halfnormcdf(0) = 0) independent of n or N, so
+                              # 0.3 leaves enormous margin (>6x the 0.05 correct-target bound) --
+                              # this control carries no real risk of its own; its job is to make the
+                              # "specifically half-normal, not just some limit" claim a checked fact.
+
+@assert all(law -> haskey(N_STEPS_MAX, law) && haskey(N_MC_MAX, law), LAW_ORDER)   # else the loop
+                                 # below would KeyError (or silently skip a law) instead of failing loudly
+
+rng_max = StableRNG(SEED_MAX)   # ONE stream, threaded across LAW_ORDER in its pinned order --
+                                 # reordering the loop would silently change every committed number
+max_results = NamedTuple[]
+for law in LAW_ORDER
+    sampler = increment_samplers[law]
+    n_steps = N_STEPS_MAX[law]
+    N_mc    = N_MC_MAX[law]
+    W = rescaled_walk(sampler, n_steps, N_mc, rng_max)
+    M = vec(maximum(W; dims = 1))   # running max PER PATH (per column) -- one scalar per sample
+
+    ks_half  = ks_statistic(M, halfnormcdf)   # correct-target KS: should be small
+    ks_wrong = ks_statistic(M, normcdf)       # wrong-target control: should be large (~0.5)
+
+    gate_correct = ks_half < MAX_KS_BOUND
+    gate_wrong   = ks_wrong > MAX_WRONG_MIN
+    gate_law = gate_correct && gate_wrong
+
+    @printf("GATE 03 [%-11s] n=%-6d  KS(M,half-normal)=%.5f  (bound %.5f) -> %s   |   KS(M,Φ)=%.4f  (> %.2f) -> %s\n",
+            String(law), n_steps, ks_half, MAX_KS_BOUND, gate_correct ? "PASS" : "FAIL",
+            ks_wrong, MAX_WRONG_MIN, gate_wrong ? "PASS" : "FAIL")
+    push!(max_results, (; law, n_steps, M, ks_half, ks_wrong, gate = gate_law))
+end
+gate_03 = all(r.gate for r in max_results)
+println("GATE 03 (all laws) -> ", gate_03 ? "PASS" : "FAIL")
+
+# --- Figure: running_max.png -- empirical CDFs of M^(n) overlaid on the half-normal target (solid)
+# and the wrong-target Phi (dashed), per law -- makes the discrimination visible, not just gated ---
+pmax = plot(; xlabel = "x", ylabel = "CDF", legend = :bottomright, size = (900, 560),
+            title = "GATE 03: running-max law -> half-normal (reflection principle)",
+            left_margin = 6Plots.mm, bottom_margin = 5Plots.mm, top_margin = 4Plots.mm)
+xs_max = range(0, 4; length = 400)
+plot!(pmax, xs_max, halfnormcdf.(xs_max); color = :black, linewidth = 2, label = "half-normal (correct target)")
+plot!(pmax, xs_max, normcdf.(xs_max); color = :black, linestyle = :dash, alpha = 0.6, label = "Φ (wrong-target control)")
+for r in max_results
+    Ms = sort(r.M)
+    n_ms = length(Ms)
+    stride = max(1, n_ms ÷ 400)          # subsample the ECDF for a legible plot; N_MC_MAX points is too dense
+    ecdf_y = (1:n_ms) ./ n_ms
+    plot!(pmax, Ms[1:stride:end], ecdf_y[1:stride:end]; color = colors_by_law[r.law], alpha = 0.8,
+          label = @sprintf("%s empirical (n=%d, KS=%.4f)", String(r.law), r.n_steps, r.ks_half))
+end
+savefig(pmax, joinpath(OUTDIR, "running_max.png"))
+
+@printf("\nrecorded: seed_max=%d, n_steps_max=%s, N_mc_max=%s, max_ks_bound=%.3f, max_wrong_min=%.2f\n",
+        SEED_MAX, string(N_STEPS_MAX), string(N_MC_MAX), MAX_KS_BOUND, MAX_WRONG_MIN)
+
+println(gate_01a && gate_02 && gate_03 ? "ALL GATES: PASS" : "ALL GATES: FAIL")
