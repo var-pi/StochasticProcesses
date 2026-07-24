@@ -657,4 +657,177 @@ savefig(pmax, joinpath(OUTDIR, "running_max.png"))
 @printf("\nrecorded: seed_max=%d, n_steps_max=%s, N_mc_max=%s, max_ks_bound=%.3f, max_wrong_min=%.2f\n",
         SEED_MAX, string(N_STEPS_MAX), string(N_MC_MAX), MAX_KS_BOUND, MAX_WRONG_MIN)
 
-println(gate_01a && gate_02 && gate_03 ? "ALL GATES: PASS" : "ALL GATES: FAIL")
+# ============================================================================
+#  Phase 4 — FALSIFIER: an infinite-variance increment breaks Donsker
+# ----------------------------------------------------------------------------
+#  Every earlier phase used increments with mean 0 AND variance 1 -- Donsker's invariance
+#  principle needs BOTH finite moments (variance 1 just fixes the scale; what matters is that it
+#  is FINITE). This phase asks what happens when the second hypothesis is dropped: feed the same
+#  `rescaled_walk` machinery a SYMMETRIC, mean-0, but genuinely INFINITE-VARIANCE increment, and
+#  show the n^(-1/2) picture breaks in exactly the way theory predicts -- not vaguely "worse," but
+#  in the OPPOSITE direction of every earlier gate.
+#
+#  This law is handled in its OWN block below, NOT by extending LAW_ORDER -- LAW_ORDER pins the
+#  draw order of a SHARED StableRNG stream across commits 01-03's finite-variance loops, and
+#  appending to it would silently reorder those draws, changing every already-committed number in
+#  this file (a CLAUDE.md non-negotiable). `:pareto` is added to the `increment_samplers` Dict
+#  (mutating the existing binding is fine -- `const` pins the Dict OBJECT, not its contents) so it
+#  is reachable by the same name-based lookup as the other three laws, but it is only ever used
+#  from this phase's own code below, with its own `SEED_CTRL` stream.
+# ============================================================================
+
+const GAMMA_PARETO = 1.5   # tail index γ ∈ (1,2): E|X| finite (γ>1, so the symmetric law has an
+                             # honest mean of exactly 0) but E[X²] = γ∫₁^∞ x^(1-γ) dx diverges for
+                             # any γ <= 2 -- at γ=1.5 the exponent 1-γ=-0.5 gives ∫x^(-0.5)dx, which
+                             # diverges at the UPPER limit (∞^0.5 = ∞): this is a PROVABLY,
+                             # genuinely infinite-variance law, not merely "a large-variance one."
+
+# Symmetric Pareto increment: sign * U^(-1/γ), U ~ Uniform(0,1) drawn UNTRUNCATED. U^(-1/γ) is a
+# standard Pareto(shape γ, scale 1) variable on [1,∞): P(U^(-1/γ) > x) = P(U < x^(-γ)) = x^(-γ) for
+# x >= 1, the textbook power-law tail. An independent Rademacher sign symmetrizes it around 0 (no
+# empirical de-meaning needed -- odd symmetry makes E[X]=0 exact, just like the other three laws'
+# construction, though here via symmetry rather than a shift).
+#
+# CRITICAL CORRECTNESS GUARD (this is what GATE 04a below is FOR): the tail must be left
+# UNTRUNCATED. A bug that caps U away from 0 (e.g. clamping to (eps, 1) for "numerical safety," or
+# capping `mag` at some large but finite value) would cap the Pareto tail away from infinity and
+# silently restore a FINITE variance -- Gate 04a's whole job is to catch exactly that: if the
+# variance were secretly finite, `Var(S_n/√n)` would settle toward a constant (as in commits
+# 01-03) instead of growing with n, and the slope gate below would (correctly) FAIL. Nothing here
+# clips `U` or `mag` in any way.
+increment_samplers[:pareto] = (rng, dims...) -> begin
+    U   = rand(rng, dims...)                 # Uniform(0,1), the FULL open support -- no clamping
+    mag = U .^ (-1.0 / GAMMA_PARETO)          # Pareto(scale=1, shape=γ) on [1,∞): P(mag>x)=x^(-γ)
+    sgn = rand(rng, (-1.0, 1.0), dims...)     # independent Rademacher sign -> symmetric about 0
+    sgn .* mag
+end
+
+const SEED_CTRL     = 20260725   # own stream for BOTH gates below (04a then 04b, in that order),
+                                   # independent of every earlier stream in this file -- cannot
+                                   # perturb any already-committed number.
+const N_LADDER_CTRL = [50, 100, 200, 400, 800]   # walk-length ladder n (own axis -- NOT the
+                                                    # sample-count N of commits 01-02's ladders)
+const N_MC_CTRL     = 2_000      # replicates of S_n/√n per rung, per batch-means group
+const NGROUP_CTRL   = 20         # batch-means replicate groups (repo convention)
+
+@assert length(N_LADDER_CTRL) >= 3   # ols needs n-2 >= 1 dof for a per-replicate slope
+
+# --- GATE 04a: Var(S_n/√n) GROWS with n (does not settle at 1) ------------------------------------
+# Theory: S_n is a sum of n iid symmetric-Pareto(γ) increments, each with infinite variance, so
+# Var(S_n) is infinite for every finite n (a sum of finitely many infinite-variance terms is still
+# infinite-variance). Concretely, S_n/√n = n^(1/γ - 1/2) * Y_n where Y_n converges in law to a
+# γ-stable variable of O(1) typical scale (the classical stable-CLT for regularly-varying tails) --
+# since γ=1.5 < 2, the exponent 1/γ - 1/2 = 1/3 > 0 is STRICTLY POSITIVE, so the scale of S_n/√n
+# diverges with n (the opposite of commits 01-03, where the analogous quantity is EXACTLY 1 for
+# every n). A finite-N_MC_CTRL SAMPLE variance of that scaled quantity is itself dominated by the
+# single largest draw (the "one big jump" heuristic for heavy tails), so it inherits the same
+# n^(2/γ-1) = n^(1/3) growth in EXPECTATION, empirically ~n^0.2-0.4 at these n (see the commit doc)
+# -- clearly, robustly positive, not the flat/zero slope commits 01-03 would show under the SAME
+# machinery with a finite-variance law.
+#
+# NOISE WARNING (why this is batch-means, not a single ladder fit): the RAW sample variance at a
+# SINGLE replicate is wildly noisy (dominated by whether that one draw happened to catch a huge
+# outlier -- observed to range over several ORDERS OF MAGNITUDE between adjacent rungs in informal
+# exploration). Averaging the RAW variances across replicates does not fix this (the arithmetic
+# mean of an infinite-variance quantity is itself unstable) -- but averaging the per-replicate
+# SLOPE (each replicate's own log-log fit across its OWN 5-point n-ladder) is well-behaved, because
+# a log-log slope is far less sensitive to which single point happens to be a large outlier than
+# the raw magnitude is. This is exactly `cov_ladder_replicate`'s pattern (GATE 01a above), just on
+# a different per-rung statistic (sample variance of the endpoint, via `empirical_cov` on a
+# reshaped 1xN "single-time-point path matrix" -- reusing the library's covariance estimator rather
+# than hand-rolling a variance).
+function var_ladder_replicate(sampler::Function, n_ladder, N, rng)
+    vars = [empirical_cov(reshape(rescaled_walk(sampler, n, N, rng)[end, :], 1, :))[1, 1]
+            for n in n_ladder]
+    slope, _ = ols_slope_se(log10.(n_ladder), log10.(vars))
+    return slope, vars
+end
+
+# Fixed-direction control margin (à la Unit 4's `slope_c > -0.75`, and 03's absolute-bound gates):
+# this is NOT a rate gated against theory-within-SE -- it only needs "clearly, robustly positive."
+# 0.10 sits with real headroom below BOTH the analytic exponent (2/γ-1 = 0.333) and the observed
+# batch-mean slope at the seed/config below (~0.42, batch SE ~0.14) -- see the commit doc for the
+# seed-robustness check (slopes 0.21-0.42 across several seeds, always clearing this margin).
+const VAR_SLOPE_MARGIN = 0.10
+
+rng_ctrl = StableRNG(SEED_CTRL)
+var_reps = [var_ladder_replicate(increment_samplers[:pareto], N_LADDER_CTRL, N_MC_CTRL, rng_ctrl)
+            for _ in 1:NGROUP_CTRL]
+var_gslopes = [r[1] for r in var_reps]
+var_errmat  = reduce(hcat, (r[2] for r in var_reps))'          # NGROUP_CTRL × length(N_LADDER_CTRL)
+var_mean    = vec(sum(var_errmat; dims = 1)) ./ NGROUP_CTRL     # for the plotted curve only
+
+slope_var = sum(var_gslopes) / NGROUP_CTRL
+se_var    = sqrt(sum(abs2, var_gslopes .- slope_var) / (NGROUP_CTRL - 1)) / sqrt(NGROUP_CTRL)
+gate_04a  = slope_var > VAR_SLOPE_MARGIN
+@printf("GATE 04a [pareto     ] Var(S_n/√n)-vs-n slope: %.4f  (batch SE %.4f)  vs margin +%.2f -> %s\n",
+        slope_var, se_var, VAR_SLOPE_MARGIN, gate_04a ? "PASS" : "FAIL")
+
+# --- GATE 04b: KS(S_n/√n, Φ) does NOT decrease like commit 02's -1/2 -----------------------------
+# Contrast target: commit 02's two n^(-1/2) laws (exponential, Rademacher) both gave slopes
+# indistinguishable from -0.5 within a few batch-means SEs. Here the increment does not even have a
+# CLT to converge to N(0,1) under -- S_n/√n's own scale DIVERGES (Gate 04a), so at any fixed x the
+# marginal CDF F_n(x) = P(S_n/√n <= x) -> P(Y <= 0) = 1/2 as n grows (a diverging-scale symmetric
+# law puts vanishing mass in any fixed finite window), meaning KS(S_n/√n, Φ) trends TOWARD the same
+# ~0.5 "totally uninformative" ceiling as commit 03's wrong-target control -- i.e. this slope should
+# be FLAT-TO-POSITIVE, the mirror image of commit 02's clean -1/2 decay. Reuses `ks_ladder_replicate`
+# (defined in Phase 2 above) VERBATIM -- same estimator, same batch-means machinery, same n-ladder --
+# so the contrast with commit 02 is apples-to-apples: nothing changed here except the increment law.
+const KS_CTRL_SLOPE_FLOOR = -0.35   # fixed floor: "not <= -1/2" with real margin (commit 02's laws
+                                      # sit AT -0.5 within a small SE-multiple; anything above -0.35
+                                      # is decisively NOT that regime). Observed slope at the seed/
+                                      # config below is ~+0.06 with a tiny batch SE (~0.002) -- the
+                                      # KS-vs-n curve here is far more stable run-to-run than the raw
+                                      # variance curve, since KS is a bounded, non-heavy-tailed statistic.
+
+ks_ctrl_reps = [ks_ladder_replicate(increment_samplers[:pareto], N_LADDER_CTRL, N_MC_CTRL, rng_ctrl)
+                for _ in 1:NGROUP_CTRL]
+ks_ctrl_gslopes = [r[1] for r in ks_ctrl_reps]
+ks_ctrl_errmat  = reduce(hcat, (r[2] for r in ks_ctrl_reps))'
+ks_ctrl_mean    = vec(sum(ks_ctrl_errmat; dims = 1)) ./ NGROUP_CTRL
+
+slope_ks_ctrl = sum(ks_ctrl_gslopes) / NGROUP_CTRL
+se_ks_ctrl    = sqrt(sum(abs2, ks_ctrl_gslopes .- slope_ks_ctrl) / (NGROUP_CTRL - 1)) / sqrt(NGROUP_CTRL)
+gate_04b      = slope_ks_ctrl > KS_CTRL_SLOPE_FLOOR
+@printf("GATE 04b [pareto     ] KS(S_n/√n,Φ)-vs-n slope: %.4f  (batch SE %.4f)  vs floor %.2f -> %s   (contrast: commit 02's laws ~ -0.50)\n",
+        slope_ks_ctrl, se_ks_ctrl, KS_CTRL_SLOPE_FLOOR, gate_04b ? "PASS" : "FAIL")
+
+gate_04 = gate_04a && gate_04b
+println("GATE 04 (variance grows AND no Gaussian limit) -> ", gate_04 ? "PASS" : "FAIL")
+
+# --- Figure: infinite_variance_control.png -- variance-growth curve + heavy-tailed QQ departure --
+p4a = plot(; xscale = :log10, yscale = :log10, xlabel = "n (walk length)",
+           ylabel = "mean Var(S_n/√n)  (over $NGROUP_CTRL replicates)",
+           title = @sprintf("GATE 04a: Pareto (γ=%.1f) -- variance GROWS", GAMMA_PARETO),
+           titlefontsize = 11, legend = :topleft,
+           left_margin = 7Plots.mm, bottom_margin = 5Plots.mm, top_margin = 8Plots.mm)
+plot!(p4a, N_LADDER_CTRL, var_mean; marker = :circle, color = :purple,
+      label = @sprintf("pareto (batch-mean slope %.3f)", slope_var))
+ref_growth = var_mean[1] .* (N_LADDER_CTRL ./ N_LADDER_CTRL[1]) .^ (2 / GAMMA_PARETO - 1)
+plot!(p4a, N_LADDER_CTRL, ref_growth; linestyle = :dash, color = :black,
+      label = @sprintf("reference slope 2/γ-1 = %.3f", 2 / GAMMA_PARETO - 1))
+hline!(p4a, [1.0]; color = :gray, linestyle = :dot, alpha = 0.6,
+       label = "finite-variance target (commits 01-03: Var ≡ 1)")
+
+# QQ panel: own small deterministic step, DERIVED from SEED_CTRL but a DISTINCT stream (continuing
+# rng_ctrl here would perturb nothing already gated, but deriving a fresh seed keeps this
+# illustrative draw fully decoupled from gates 04a/04b's numbers, matching Phase 2's marginal_qq.png
+# convention). Uses the largest rung of the SAME ladder -- the departure from N(0,1) is starkest
+# there, since the diverging scale (Gate 04a) has had the most room to separate from a fixed Φ.
+rng_qq_ctrl   = StableRNG(SEED_CTRL + 1)
+n_qq_ctrl     = N_LADDER_CTRL[end]
+endpoint_ctrl = sort(rescaled_walk(increment_samplers[:pareto], n_qq_ctrl, N_QQ, rng_qq_ctrl)[end, :])
+qemp_ctrl = [_quantile(endpoint_ctrl, p) for p in QQ_PROBS]
+qth_ctrl  = normquantile.(QQ_PROBS)
+p4b = scatter(qth_ctrl, qemp_ctrl; markersize = 2, label = "empirical", xlabel = "N(0,1) quantile",
+              ylabel = "empirical quantile (S_n/√n)",
+              title = "QQ: pareto (n=$n_qq_ctrl) -- heavy tails depart",
+              titlefontsize = 11, legend = :topleft,
+              left_margin = 6Plots.mm, bottom_margin = 5Plots.mm, top_margin = 8Plots.mm)
+plot!(p4b, qth_ctrl, qth_ctrl; linestyle = :dash, color = :black, label = "y=x (Gaussian reference)")
+savefig(plot(p4a, p4b; layout = (1, 2), size = (1200, 520)), joinpath(OUTDIR, "infinite_variance_control.png"))
+
+@printf("\nrecorded: seed_ctrl=%d, gamma_pareto=%.2f, n_ladder_ctrl=%s, N_mc_ctrl=%d, ngroup_ctrl=%d, var_slope_margin=%.2f, ks_ctrl_slope_floor=%.2f\n",
+        SEED_CTRL, GAMMA_PARETO, string(N_LADDER_CTRL), N_MC_CTRL, NGROUP_CTRL, VAR_SLOPE_MARGIN, KS_CTRL_SLOPE_FLOOR)
+
+println(gate_01a && gate_02 && gate_03 && gate_04 ? "ALL GATES: PASS" : "ALL GATES: FAIL")
