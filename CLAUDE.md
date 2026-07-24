@@ -14,8 +14,8 @@ result — building a gallery of reproducible stochastic-process demos.
 
 **Current state:** Units 0 (covariance core + Cholesky sampling), 1 (spectral/Bochner: the
 `spectral.jl` core, Welch/raw periodogram estimators, circulant-embedding sampler, and the
-`01_spectral_bochner` experiment), 2 (Karhunen–Loève), 3 (process zoo / reconciliation), and 4
-(ergodicity / loop-closer) are complete. Unit 2 comprises five commits: `periodic_kernel` (torus contrast kernel), the `kl.jl`
+`01_spectral_bochner` experiment), 2 (Karhunen–Loève), 3 (process zoo / reconciliation), 4
+(ergodicity / loop-closer), and 5 (random-walk → BM scaling limit) are complete. Unit 2 comprises five commits: `periodic_kernel` (torus contrast kernel), the `kl.jl`
 module (symmetrized Nyström eigenproblem), the `sample_kl` KL-truncation sampler, the
 `02_kl_quadrature` experiment, and its READMEs. Unit 3 comprises six commits: `brownian_bridge_kernel`
 (a catalogue kernel), the `gof.jl` module (`ks_statistic` — deliberately the one `src/` module
@@ -29,8 +29,16 @@ four commits: the `ergodic.jl` module (the path-side time-average estimators `ru
 (`D*=D/α²`); and the exact Lemma-1.17 finite-T variance identity `time_average_variance_exact`), the
 `04_ergodicity` experiment (the variance-vs-T `1/T` slope and its `2D*` constant, gated against
 independent sub-ensemble slope SEs), its non-integrable-`C` control (the falsifier showing
-Prop. 1.16's `L¹` hypothesis is load-bearing), and its READMEs. Units 5–7 are planned but not yet
-implemented — do not pre-stub them.
+Prop. 1.16's `L¹` hypothesis is load-bearing), and its READMEs. Unit 5 comprises four experiment-only
+commits (no new `src/` code — it reuses `gof.jl`'s `ks_statistic` and `empirical_cov`): the
+`rescaled_walk` lattice builder + the three increment-law samplers and the two-time
+covariance→`min(s,t)` MC-rate gate; the headline KS-vs-`n` marginal-rate plot with **hybrid** gating
+(MC stochastic `−½` for exponential/skewness and Rademacher/lattice-discreteness, exact-Irwin–Hall
+deterministic `−1` for uniform/smooth-symmetric — a **three-mechanism** story that corrects the brief,
+which had grouped Rademacher with the `n⁻¹` laws); the running-maximum→half-normal functional; and the
+infinite-variance (symmetric-Pareto, `γ=1.5`) falsifier. `05_bm_scaling_limit/` is the first experiment
+with **no** `src/` or `test/` change — its verification is entirely the experiment's Monte-Carlo plus
+deterministic exact-CDF gates. Units 6–7 are planned but not yet implemented — do not pre-stub them.
 
 ## Architecture
 
@@ -122,5 +130,5 @@ These are load-bearing for reproducibility; violating one silently corrupts ever
 
 0 covariance core (done) · 1 spectral/Bochner (done) · 2 Karhunen–Loève (done) ·
 3 process zoo (done) · 4 ergodicity (done) ·
-5 random-walk → BM · 6 fractional BM · 7 SDE bridge. `src/` accretes modules; existing files are
+5 random-walk → BM (done) · 6 fractional BM · 7 SDE bridge. `src/` accretes modules; existing files are
 not restructured. Do not implement a unit until its phase-plan is being worked.

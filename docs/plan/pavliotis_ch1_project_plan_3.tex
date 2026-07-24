@@ -531,9 +531,12 @@ complementary to the covariance-operator picture and deliberately off the $\math
 converge to the Gaussian/BM target: the one-time marginal $\Rightarrow N(0,1)$, the two-time
 covariance $\to\min(s,t)$. The \emph{marginal-convergence rate is law-dependent}: Berry--Esseen bounds
 the Kolmogorov--Smirnov statistic by $O(n^{-1/2})$, but that rate is achieved only when the skewness is
-nonzero --- for a symmetric increment the leading $n^{-1/2}$ Edgeworth term vanishes, leaving the
-$O(n^{-1})$ term. So the target is $\propto n^{-1/2}$ for an \emph{exponential} (skewed) increment and
-$\propto n^{-1}$ for \emph{Rademacher} and \emph{uniform} (symmetric) ones. The headline artifact is
+nonzero --- for a \emph{smooth} symmetric increment the leading $n^{-1/2}$ Edgeworth term vanishes,
+leaving the $O(n^{-1})$ kurtosis term. A \emph{lattice} symmetric law, however, carries a separate,
+skewness-independent Esseen lattice-discreteness term that is itself $O(n^{-1/2})$ and does not vanish.
+So the target is $\propto n^{-1/2}$ for the \emph{exponential} (skewed) increment \emph{and} for
+\emph{Rademacher} (symmetric but lattice, via discreteness), and $\propto n^{-1}$ only for the
+smooth-symmetric \emph{uniform} increment --- three mechanisms, two rates. The headline artifact is
 the KS-vs-$n$ log--log plot with one line per law, each slope gated stochastically. \extnote{Donsker's
 invariance principle / the functional CLT; Berry--Esseen for the $n^{-1/2}$ bound and the Edgeworth
 expansion for the $n^{-1}$ symmetric-law rate. Standard, external to the second-order framing;
